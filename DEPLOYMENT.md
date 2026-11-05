@@ -198,3 +198,11 @@ python -m infra.destroy
   - Cloud fix: lazy imports + lazy client init (`get_model`/`get_memory_client`/`get_bedrock_runtime`);
     pinned `strands-agents-tools<0.9.0`; added `.dockerignore`. Deployed and invoked successfully
     (ARN `cs_support_agent-yMZc9TGr2D`). See §5 for the incident writeup.
+- **Wave 2** — Knowledge Base RAG tool (TODO 6). Implemented `search_knowledge_base(query)`:
+  `_is_configured(KB_ID)` guard → "Knowledge base not configured."; `get_bedrock_runtime().retrieve`
+  with `numberOfResults` from `config.yaml:retrieval.top_k`; empty → no-results message; else join
+  chunk texts with the configured separator; specific-exception handling → readable error; INFO log
+  per call. Wired into the entrypoint tools list. Verified: ruff clean; compile OK; guard returns the
+  not-configured message; live smoke — the model *called the tool* for a policy question and degraded
+  gracefully (no hallucinated policy) since the KB is not provisioned yet. Full T3 passes once the KB
+  exists (Wave I).

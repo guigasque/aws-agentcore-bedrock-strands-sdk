@@ -281,12 +281,16 @@ Text extraction helper (shared idea): a message's `content` is a list of blocks;
 ```python
 @tool
 def search_knowledge_base(query: str) -> str:
-    if not KB_ID or KB_ID.startswith("<"):
+    if not _is_configured(KB_ID):
         return "Knowledge base not configured."
+    cfg = _CFG.get("retrieval", {})
     try:
-        resp = _bedrock_runtime.retrieve(
+        resp = get_bedrock_runtime().retrieve(
             knowledgeBaseId=KB_ID,
             retrievalQuery={"text": query},
+            retrievalConfiguration={
+                "vectorSearchConfiguration": {"numberOfResults": cfg.get("top_k", 5)}
+            },
         )
     except Exception as e:
         return f"Knowledge base search failed: {e}"
@@ -294,8 +298,10 @@ def search_knowledge_base(query: str) -> str:
     if not results:
         return "No relevant information found in the knowledge base."
     chunks = [r.get("content", {}).get("text", "") for r in results]
-    return "\n---\n".join(c for c in chunks if c)
+    return cfg.get("chunk_separator", "\n---\n").join(c for c in chunks if c)
 ```
+Uses the lazy `get_bedrock_runtime()`, the `_is_configured()` guard, and config-driven `top_k` /
+`chunk_separator` (so the retrieval knobs in `config.yaml` actually take effect).
 
 ### TODO 7 — `calculate_loyalty_discount`
 Build a self-contained code string (f-string injecting the args **and the config-driven rates**),

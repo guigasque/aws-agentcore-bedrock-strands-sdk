@@ -296,8 +296,32 @@ def search_knowledge_base(query: str) -> str:
     Returns:
         Relevant information retrieved from the knowledge base
     """
-    # TODO: Implement the Knowledge Base search
-    pass
+    if not _is_configured(KB_ID):
+        return "Knowledge base not configured."
+
+    retrieval_cfg = _CFG.get("retrieval", {})
+    top_k = retrieval_cfg.get("top_k", 5)
+    separator = retrieval_cfg.get("chunk_separator", "\n---\n")
+
+    logger.info("search_knowledge_base query=%r top_k=%s", query, top_k)
+    try:
+        resp = get_bedrock_runtime().retrieve(
+            knowledgeBaseId=KB_ID,
+            retrievalQuery={"text": query},
+            retrievalConfiguration={
+                "vectorSearchConfiguration": {"numberOfResults": top_k}
+            },
+        )
+    except Exception as error:  # degrade gracefully; never crash the turn
+        logger.warning("Knowledge base retrieve failed: %s", error)
+        return f"Knowledge base search failed: {error}"
+
+    results = resp.get("retrievalResults", [])
+    if not results:
+        return "No relevant information found in the knowledge base."
+
+    chunks = [r.get("content", {}).get("text", "") for r in results]
+    return separator.join(chunk for chunk in chunks if chunk)
 
 
 # ── TODO 7 — Loyalty Discount Tool (Code Interpreter) ────────────────────────
@@ -377,7 +401,7 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         session_id = (payload or {}).get("session_id") or str(uuid.uuid4())
         logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
 
-        tools: list = []  # Wave 2+ append tools here.
+        tools: list = [search_knowledge_base]  # Wave 2+ append tools here.
 
         agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
         result = agent(user_input)

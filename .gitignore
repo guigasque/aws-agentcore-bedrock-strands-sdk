@@ -10,6 +10,7 @@ build/
 dist/
 *.egg-info/
 
-# AgentCore toolkit local config (optional — contains deployment IDs, not secrets)
-# .bedrock_agentcore.yaml
-starter/.bedrock_agentcore/*
+# AgentCore toolkit: keep the deploy manifest (.bedrock_agentcore.yaml) tracked —
+# it has deployment IDs/ARNs, not secrets, and setup_permissions.py reads it.
+# Ignore only the local state/cache directory.
+starter/.bedrock_agentcore/
