@@ -1,0 +1,36 @@
+# Ruff configuration — lint + format for the Customer Support AI Agent.
+# Run: `ruff check .` and `ruff format .` from the starter/ directory.
+
+target-version = "py313"
+line-length = 100
+
+# Directories/files not part of our source.
+extend-exclude = [
+    ".venv",
+    "build",
+    "*.egg-info",
+    "lambda",          # deployed as-is; not linted to our style
+]
+
+[lint]
+# A pragmatic, strong-but-not-noisy rule set.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort (import ordering)
+    "B",    # flake8-bugbear (likely bugs)
+    "UP",   # pyupgrade (modern syntax)
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[lint.isort]
+known-first-party = ["infra"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

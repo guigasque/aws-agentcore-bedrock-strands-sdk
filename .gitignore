@@ -1,0 +1,14 @@
+# Secrets
+.env
+.env.*
+
+# Python / venv / build
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+
+# AgentCore toolkit local config (optional — contains deployment IDs, not secrets)
+# .bedrock_agentcore.yaml

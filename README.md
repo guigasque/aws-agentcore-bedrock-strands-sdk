@@ -4,6 +4,18 @@
 
 ---
 
+> **Implementation note (this fork):** the sections below are the original course brief and are
+> kept as the reference. For how this repository is actually built, set up, and deployed, see:
+> - **Developer guide:** [`starter/README.md`](starter/README.md)
+> - **Architecture & diagrams:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+> - **Operational build log:** [`DEPLOYMENT.md`](DEPLOYMENT.md)
+> - **Spec (requirements / design / tasks):** [`.kiro/specs/customer-support-agent/`](.kiro/specs/customer-support-agent/)
+>
+> This fork provisions **all AWS resources as code** (no console) and follows engineering
+> standards (externalized config, idempotent IaC, linting, graceful error handling).
+
+---
+
 ## Overview
 
 In this project you will build a functional AI customer support agent for a fictional Amazon store. Starting from a simple local chatbot, you will progressively add cloud infrastructure, external tool integration, a knowledge base, persistent memory, a code interpreter, and a browser — finishing with a deployable agent that can handle customer inquiries end-to-end.

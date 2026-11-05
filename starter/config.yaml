@@ -1,0 +1,64 @@
+# ============================================================================
+# Customer Support AI Agent — configuration (single source of truth)
+# ============================================================================
+# This file is the authoritative place for every tunable value. main.py reads
+# it via load_config() with safe built-in defaults, so a missing/invalid file
+# never prevents the agent from starting.
+#
+# IMPORTANT — three values are mirrored into main.py as literal assignments
+# (REGION, KB_ID, MEMORY_ID) because the provided setup_permissions.py AST-reads
+# them from main.py. Do NOT hand-edit those literals in main.py; edit them here
+# and run `python sync_config.py` to mirror them. infra/outputs.py does this
+# automatically after provisioning.
+# ----------------------------------------------------------------------------
+
+# Bedrock reasoning model (Amazon Nova 2 Lite global inference profile).
+model_id: "global.amazon.nova-2-lite-v1:0"
+
+# AWS region for all resources. Mirrored into main.py literal REGION.
+region: "us-east-1"
+
+# AgentCore Gateway MCP endpoint (ends with /mcp). Written by infra/outputs.py.
+# Not read by setup_permissions.py, so it lives only here (not a main.py literal).
+gateway_url: "<gateway_url>"
+
+# Bedrock Knowledge Base ID (10-char alphanumeric). Mirrored into main.py KB_ID.
+knowledge_base_id: "<kbid>"
+
+# AgentCore Memory ID. Mirrored into main.py MEMORY_ID.
+memory_id: "<mem_id>"
+
+# Retrieval (RAG) behaviour for search_knowledge_base.
+retrieval:
+  top_k: 5                 # number of chunks to request from the Retrieve API
+  chunk_separator: "\n---\n"   # how retrieved chunks are joined in the tool result
+
+# Loyalty discount business rules (used by the Code Interpreter tool AND its
+# fallback — single source, no divergent copies).
+loyalty:
+  earn_rates:               # points earned per $1 spent, by product category
+    standard: 1
+    device: 2
+    fresh: 5
+  tier_rates:               # tier discount fraction applied after points
+    Silver: 0.00
+    Gold: 0.10
+    Platinum: 0.15
+  points_per_dollar: 100    # 100 points = $1 redemption value
+  min_redemption: 500       # points redeemed are floored to a multiple of this
+  max_redeem_fraction: 0.5  # points may cover at most this fraction of the order
+
+# AgentCore Browser tool.
+browser:
+  session_timeout: 3600     # seconds
+
+# AgentCore Memory retrieval knob for the MemoryHook.
+memory:
+  retrieve_top_k: 5
+
+# Network timeouts (seconds) where the SDK permits.
+timeouts:
+  gateway_connect_seconds: 30
+
+# External system prompt file (relative to main.py). Keeps the prompt out of code.
+system_prompt_path: "system_prompt.txt"
