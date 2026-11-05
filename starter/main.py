@@ -19,36 +19,87 @@ Invoke deployed agent:
 
 # ── Imports ───────────────────────────────────────────────────────────────────
 # These imports are provided. Do not remove them.
-from strands import Agent, tool
-from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from bedrock_agentcore.memory import MemoryClient
-from strands.models import BedrockModel
-from strands.tools.mcp.mcp_client import MCPClient
-from mcp.client.streamable_http import streamable_http_client
-import argparse, json
-import os, asyncio, boto3
-from strands.hooks import (
-    HookProvider, AfterInvocationEvent, HookRegistry, MessageAddedEvent,
-)
+import argparse
+import asyncio
+import json
 import logging
+import os
 import uuid
-from typing import Dict
-from bedrock_agentcore.tools.code_interpreter_client import code_session
-from strands_tools.browser import AgentCoreBrowser
+from pathlib import Path
+from typing import Any
 
+import boto3
+import yaml
+from bedrock_agentcore.memory import MemoryClient
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from strands import Agent, tool
+from strands.hooks import (
+    AfterInvocationEvent,
+    HookProvider,
+    HookRegistry,
+    MessageAddedEvent,
+)
+from strands.models import BedrockModel
 
-logging.basicConfig(level=logging.WARNING)
+# NOTE: heavier / version-sensitive integrations are imported lazily inside the
+# functions that use them, so a slow or incompatible optional dependency can never
+# break module import (which must complete within the runtime's init window):
+#   - bedrock_agentcore.tools.code_interpreter_client.code_session  (Wave 3)
+#   - mcp.client.streamable_http.streamable_http_client             (Wave 5)
+#   - strands.tools.mcp.mcp_client.MCPClient                        (Wave 5)
+#   - the AgentCore browser tool                                    (Wave 4)
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CSAI_Agent")
 
-# ── TODO 1 — App Initialisation ───────────────────────────────────────────────
-# Create a BedrockAgentCoreApp instance.
-# This registers the ASGI server for AgentCore deployment.
-# There must be exactly one instance per deployment.
-#
-# Hint: app = BedrockAgentCoreApp()
 
-# TODO: Create the BedrockAgentCoreApp instance
-app = None  # Replace this line
+# ── Configuration loader ──────────────────────────────────────────────────────
+# config.yaml is the single source of truth for every tunable value. load_config()
+# reads it and returns its contents. _MINIMAL_DEFAULTS holds ONLY the few values
+# needed to start the process if config.yaml is somehow missing/invalid at runtime
+# (e.g. not bundled into the deployed image) — it is a safety net, not a second
+# source of truth. Each value is otherwise read at its point of use with its own
+# `.get(..., fallback)` so the full config tree is never duplicated here.
+
+_MINIMAL_DEFAULTS: dict[str, Any] = {
+    "model_id": "global.amazon.nova-2-lite-v1:0",
+    "region": "us-east-1",
+    "system_prompt_path": "system_prompt.txt",
+}
+
+
+def load_config(path: str | None = None) -> dict[str, Any]:
+    """Load config.yaml, falling back to minimal start-up defaults.
+
+    Returns config.yaml merged over :data:`_MINIMAL_DEFAULTS`. Never raises: when the
+    file is missing or invalid, the minimal defaults let the process start, and
+    per-key callers supply their own fallbacks for anything else.
+    """
+    config_path = Path(path) if path else Path(__file__).resolve().parent / "config.yaml"
+    merged: dict[str, Any] = {**_MINIMAL_DEFAULTS}
+    try:
+        loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            merged.update(loaded)
+        else:
+            logger.warning("config.yaml is not a mapping; using minimal defaults.")
+    except FileNotFoundError:
+        logger.warning("config.yaml not found at %s; using minimal defaults.", config_path)
+    except (OSError, yaml.YAMLError) as error:
+        logger.warning("Could not read config.yaml (%s); using defaults.", error)
+    return merged
+
+
+def _is_configured(value: str | None) -> bool:
+    """True when a config value is a real (non-placeholder, non-empty) string."""
+    return bool(value) and not str(value).startswith("<")
+
+
+_CFG = load_config()
+
+# ── TODO 1 — App Initialisation ───────────────────────────────────────────────
+# A single BedrockAgentCoreApp instance registers the ASGI server for AgentCore.
+app = BedrockAgentCoreApp()
 
 
 # Suppress interactive tool-consent prompts (required in headless deployments).
@@ -56,40 +107,76 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
 
 # ── TODO 2 — Configuration ────────────────────────────────────────────────────
-# Replace the placeholder strings with your actual AWS resource values.
-# You collected these in the infrastructure setup section of the project instructions.
+# config.yaml is the single source of truth (see load_config above). However, the
+# provided setup_permissions.py (which must not be modified) reads REGION, KB_ID and
+# MEMORY_ID by AST-parsing *literal string assignments* in this file — it calls
+# ast.literal_eval on the right-hand side, so a `_CFG.get(...)` expression would make
+# it fail. Those three therefore MUST stay as plain string literals here.
 #
-# GATEWAY_URL format: https://<alias>.gateway.bedrock-agentcore.<region>.amazonaws.com/mcp
-# This starter uses an unsigned MCP connection and therefore assumes the
-# project Gateway is configured with the NONE authorizer.
-# KB_ID       format: 10-character alphanumeric string from the KB console
-# REGION:     your AWS region, e.g. "us-east-1"
-# MEMORY_ID   format: shown in the AgentCore Memory console
+# To avoid two sources of truth, they are not hand-edited: sync_config.py mirrors
+# them from config.yaml (region / knowledge_base_id / memory_id), and infra/outputs.py
+# runs that sync automatically after provisioning. Treat the literals below like a
+# generated lockfile — edit config.yaml, then run `python sync_config.py`.
+#
+# GATEWAY_URL is NOT read by setup_permissions.py, so it is sourced directly from
+# config.yaml like every other value.
 
-GATEWAY_URL = "<gateway_url>"   # TODO: Replace with your Gateway URL
-KB_ID       = "<kbid>"          # TODO: Replace with your Knowledge Base ID
-REGION      = "<region>"        # TODO: Replace with your AWS region
-MEMORY_ID   = "<mem_id>"        # TODO: Replace with your Memory ID
+REGION    = "us-east-1"  # mirror of config.yaml:region (via sync_config.py)
+KB_ID     = "<kbid>"  # mirror of config.yaml:knowledge_base_id (via sync_config.py)
+MEMORY_ID = "<mem_id>"  # mirror of config.yaml:memory_id (via sync_config.py)
+
+GATEWAY_URL = _CFG.get("gateway_url", "<gateway_url>")
 
 
 # ── TODO 3 — Model and Clients ────────────────────────────────────────────────
-# Create:
-#   1. A BedrockModel using model_id "global.amazon.nova-2-lite-v1:0"
-#   2. A MemoryClient with region_name=REGION
-#   3. A boto3 client for the "bedrock-agent-runtime" service in REGION
-#
-# Hint: model = BedrockModel(model_id=model_id)
+# Reasoning model (Nova 2 Lite) plus the Memory and Bedrock KB runtime clients.
+# These are created lazily (cached singletons) rather than at import time, so module
+# import always completes quickly within the runtime's initialization window and a
+# transient AWS/client hiccup can never break startup.
+model_id = _CFG.get("model_id", "global.amazon.nova-2-lite-v1:0")
 
-model_id = "global.amazon.nova-2-lite-v1:0"
+_model: BedrockModel | None = None
+_memory_client: MemoryClient | None = None
+_bedrock_runtime_client: Any = None
 
-# TODO: Create the BedrockModel instance
-model = None  # Replace this line
 
-# TODO: Create the MemoryClient instance
-memory_client = None  # Replace this line
+def get_model() -> BedrockModel:
+    """Return the shared BedrockModel, creating it on first use."""
+    global _model
+    if _model is None:
+        _model = BedrockModel(model_id=model_id)
+    return _model
 
-# TODO: Create the boto3 bedrock-agent-runtime client
-_bedrock_runtime = None  # Replace this line
+
+def get_memory_client() -> MemoryClient:
+    """Return the shared MemoryClient, creating it on first use."""
+    global _memory_client
+    if _memory_client is None:
+        _memory_client = MemoryClient(region_name=REGION)
+    return _memory_client
+
+
+def get_bedrock_runtime() -> Any:
+    """Return the shared bedrock-agent-runtime client, creating it on first use."""
+    global _bedrock_runtime_client
+    if _bedrock_runtime_client is None:
+        _bedrock_runtime_client = boto3.client("bedrock-agent-runtime", region_name=REGION)
+    return _bedrock_runtime_client
+
+
+# System prompt is externalised (config.yaml:system_prompt_path).
+def _load_system_prompt() -> str:
+    """Load the system prompt from the configured file, with a minimal fallback."""
+    prompt_file = _CFG.get("system_prompt_path", "system_prompt.txt")
+    prompt_path = Path(__file__).resolve().parent / prompt_file
+    try:
+        return prompt_path.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        logger.warning("Could not read system prompt (%s); using a minimal default.", error)
+        return "You are a helpful Amazon store customer support assistant. Be concise and accurate."
+
+
+SYSTEM_PROMPT = _load_system_prompt()
 
 
 # ── TODO 4 — Namespace Helper ─────────────────────────────────────────────────
@@ -106,10 +193,10 @@ _bedrock_runtime = None  # Replace this line
 #   { "SEMANTIC": "cs_agent/{actorId}/facts",
 #     "USER_PREFERENCE": "cs_agent/{actorId}/preferences" }
 
-def get_namespaces(mem_client: MemoryClient, memory_id: str) -> Dict:
+def get_namespaces(mem_client: MemoryClient, memory_id: str) -> dict:
     """Return a dict mapping strategy type → namespace template string."""
-    # TODO: Implement this function
-    pass
+    # TODO: Implemented in Wave 6.
+    raise NotImplementedError("get_namespaces is implemented in Wave 6.")
 
 
 # ── TODO 5 — Memory Hook ──────────────────────────────────────────────────────
@@ -250,16 +337,8 @@ def calculate_loyalty_discount(
     Returns:
         Full discount breakdown and final price
     """
-    # TODO: Build the code string (use an f-string to inject the arguments)
-    code = ""  # Replace with your code string
-
-    try:
-        # TODO: Execute the code using code_session and return the result
-        pass
-
-    except Exception as e:
-        # TODO: Implement fallback calculation using tier discount only
-        pass
+    # TODO: Implemented in Wave 3 (Code Interpreter) with a tier-only fallback.
+    raise NotImplementedError("calculate_loyalty_discount is implemented in Wave 3.")
 
 
 # ── TODO 8 — Agent Entrypoint ─────────────────────────────────────────────────
@@ -278,17 +357,42 @@ def calculate_loyalty_discount(
 #   8. Handle exceptions gracefully
 
 @app.entrypoint
-async def invoke(payload, context=None):
-    """
-    Main handler called by AgentCore for every incoming request.
+async def invoke(payload: dict[str, Any], context: Any = None) -> str:
+    """Main handler called by AgentCore for every incoming request.
 
     Expected payload keys:
       prompt      (str, required) — the customer's message
-      customer_id (str, optional) — unique customer identifier
+      customer_id (str, optional) — unique customer identifier (memory actor id)
       session_id  (str, optional) — session identifier; generated if absent
+
+    Wave 1 builds a tool-less agent (model only). Later waves add the KB, loyalty,
+    browser, and gateway tools plus the memory hook.
     """
-    # TODO: Implement the agent invocation
-    pass
+    try:
+        user_input = (payload or {}).get("prompt")
+        if not user_input or not str(user_input).strip():
+            return "Error: 'prompt' is required."
+
+        actor_id = (payload or {}).get("customer_id") or "anonymous"
+        session_id = (payload or {}).get("session_id") or str(uuid.uuid4())
+        logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
+
+        tools: list = []  # Wave 2+ append tools here.
+
+        agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
+        result = agent(user_input)
+        return _response_text(result)
+    except Exception as error:  # noqa: BLE001 - entrypoint must never crash the runtime
+        logger.exception("invoke failed")
+        return f"Error handling request: {error}"
+
+
+def _response_text(result: Any) -> str:
+    """Extract the first text content block from a Strands AgentResult."""
+    try:
+        return result.message["content"][0]["text"]
+    except (AttributeError, KeyError, IndexError, TypeError):
+        return str(result)
 
 
 # ── CLI entry point (do not modify) ──────────────────────────────────────────

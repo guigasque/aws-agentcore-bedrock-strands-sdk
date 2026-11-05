@@ -115,10 +115,18 @@ _Fills: TODO 7; adds the tool to the entrypoint tools list._
 _Commit: `feat(todo8): agentcore browser tool`_
 _Fills: browser portion of TODO 8._
 
-- [ ] 4.1 Instantiate `AgentCoreBrowser(region=REGION)` in the entrypoint; add `browser.browser`
-  to the tools list.
-  - _Requirements: 8.3, 8.4 — Rubric 6_
-- [ ] 4.2 Verify compile + deploy; T6 — `https://www.udacity.com` → page title from the live site.
+> **Caveat (from Wave 1):** `strands_tools.browser.AgentCoreBrowser` was removed in
+> `strands-agents-tools` 0.9.0. We are pinned `<0.9.0`, so the starter approach works. This wave
+> decides: (a) stay pinned and use `AgentCoreBrowser` via the lazy `_browser_tools()` helper, or
+> (b) migrate to `bedrock_agentcore.tools.browser_client.BrowserClient` + Playwright in a custom
+> `@tool`. Default: (a) for now; revisit if the pin becomes a problem.
+
+- [ ] 4.1 Implement `_browser_tools()`: lazily import `AgentCoreBrowser`, instantiate with
+  `region=REGION` and `session_timeout` from config, return `[browser.browser]`; on ImportError log
+  and return `[]` (graceful degradation). Entrypoint already calls it (Wave 1 wiring).
+  - _Requirements: 8.3, 8.4, 12.1, 12.2 — Rubric 6_
+- [ ] 4.2 Verify ruff + compile + deploy; T6 — `https://www.udacity.com` → page title from the live
+  site.
   - _Test: T6 (browser is account-level; needs browser IAM from setup_permissions)._
 
 ---

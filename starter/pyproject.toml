@@ -7,12 +7,14 @@ requires-python = ">=3.13"
 dependencies = [
     "boto3",
     "PyYAML",
+    # Pinned to the versions verified locally so the deployed runtime matches.
+    # strands-agents-tools MUST stay <0.9.0: 0.9.0 removed strands_tools.browser.AgentCoreBrowser.
     "bedrock-agentcore>=1.4.1",
     "bedrock-agentcore-starter-toolkit>=0.3.0",
     "chardet>=6.0.0.post1",
     "nest-asyncio>=1.6.0",
     "playwright>=1.58.0",
     "strands-agents>=1.28.0",
-    "strands-agents-tools>=0.2.21",
+    "strands-agents-tools>=0.2.21,<0.9.0",
     "urllib3>=2.6.3",
 ]

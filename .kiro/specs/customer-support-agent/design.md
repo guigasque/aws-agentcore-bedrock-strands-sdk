@@ -114,8 +114,20 @@ system_prompt_path: "system_prompt.txt"
   factored into named helpers.
 - `python -m py_compile` + `ruff check` gate every wave before hand-off.
 
-### Security
+### Dependency & startup hygiene (learned in Wave 1)
 
+- **Pin deployed dependencies to the versions verified locally.** `direct_code_deploy` re-resolves
+  from `pyproject.toml`, so loose ranges can pull a newer, incompatible release into the runtime
+  (Wave 1: `strands-agents-tools` 0.9.0 removed `strands_tools.browser` and crashed init). Constrain
+  API-critical packages (`strands-agents-tools>=0.2.21,<0.9.0`) so deploy == local.
+- **Keep module import cheap and crash-proof.** Construct clients/model lazily (cached accessors)
+  and import heavy/optional/version-sensitive integrations (browser, MCP, code interpreter) inside
+  the functions that use them, so import always finishes within the runtime init window and an
+  optional dependency can never break startup.
+- **Keep the deploy bundle lean.** `.dockerignore` excludes `.venv/`, `build/`, `*.egg-info/`,
+  caches, `.env`, and the toolkit state dir.
+
+### Security
 - NONE-authorizer Gateway is sandbox-only; documented and deleted at teardown; no sensitive data
   sent through it.
 - No secrets in code, config, logs, or the committed repo (`.env` gitignored).
@@ -157,8 +169,8 @@ client ── │ @app.entrypoint invoke(payload)                               
 invoke    │   payload: {prompt, customer_id (actorId), session_id?}                    │
           │                                                                             │
           │   1. actor_id, session_id (uuid fallback)                                   │
-          │   2. MemoryHook(actor_id, session_id, memory_client, MEMORY_ID)             │
-          │   3. AgentCoreBrowser(region=REGION) → browser tool                         │
+          │   2. MemoryHook(actor_id, session_id, get_memory_client(), MEMORY_ID)       │
+          │   3. browser tool via lazy _browser_tools() (import only when used)         │
           │   4. with MCPClient(streamable_http_client(GATEWAY_URL)) as mcp:            │
           │        gateway_tools = mcp.list_tools_sync()                                │
           │        agent = Agent(model, tools=[kb, loyalty, browser, *gateway_tools],   │
@@ -202,14 +214,22 @@ built-in defaults merged under the file values; a missing/invalid file yields de
 never fails. `sync_config.py` (our idempotent tool) rewrites only the three literal lines above
 from `config.yaml`, keeping the single source of truth without breaking the untouchable script.
 
-### TODO 3 — Model and clients (values from config)
+### TODO 3 — Model and clients (lazy, config-driven)
+Clients and the model are created **lazily** (cached singletons via `get_model()`,
+`get_memory_client()`, `get_bedrock_runtime()`) rather than at import time, so module import always
+completes within the runtime's initialization window and a transient client/import issue cannot
+break startup (learned from the Wave 1 cold-start incident).
 ```python
-model = BedrockModel(model_id=_CFG["model_id"])            # global.amazon.nova-2-lite-v1:0
-memory_client = MemoryClient(region_name=REGION)
-_bedrock_runtime = boto3.client("bedrock-agent-runtime", region_name=REGION)
+model_id = _CFG.get("model_id", "global.amazon.nova-2-lite-v1:0")   # Nova 2 Lite
+
+def get_model() -> BedrockModel:          # cached
+    ...
+def get_memory_client() -> MemoryClient:  # cached
+    ...
+def get_bedrock_runtime():                # cached boto3 "bedrock-agent-runtime"
+    ...
 ```
-`model_id` comes from config (default `global.amazon.nova-2-lite-v1:0`); `REGION` is the mirrored
-literal, which also equals `_CFG["region"]`.
+`REGION` is the mirrored literal, which also equals `_CFG["region"]`.
 
 ### TODO 4 — `get_namespaces`
 ```python
@@ -337,6 +357,8 @@ tier 10% → `11` off, final `99.00`, savings `51.00`, points spent `4000`, earn
 remaining `4250-4000+99 = 349`.
 
 ### TODO 8 — `invoke` entrypoint
+Heavy/version-sensitive integrations (browser, MCP, code interpreter) are imported lazily *inside*
+this function, not at module top level, so module import never crashes on an optional dependency.
 ```python
 @app.entrypoint
 async def invoke(payload, context=None):
@@ -346,32 +368,45 @@ async def invoke(payload, context=None):
             return "Error: 'prompt' is required."
         actor_id  = payload.get("customer_id") or "anonymous"
         session_id = payload.get("session_id") or str(uuid.uuid4())
+        logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
 
-        memory_hook = MemoryHook(actor_id, session_id, memory_client, MEMORY_ID)
-        browser = AgentCoreBrowser(region=REGION)
+        memory_hook = MemoryHook(actor_id, session_id, get_memory_client(), MEMORY_ID)
 
-        tools = [search_knowledge_base, calculate_loyalty_discount, browser.browser]
+        tools = [search_knowledge_base, calculate_loyalty_discount]
+        tools += _browser_tools()        # lazy import of the browser tool (Wave 4)
 
+        # lazy imports: MCPClient, streamable_http_client (Wave 5)
+        from mcp.client.streamable_http import streamable_http_client
+        from strands.tools.mcp.mcp_client import MCPClient
         mcp_client = MCPClient(lambda: streamable_http_client(GATEWAY_URL))
         with mcp_client:
             tools.extend(mcp_client.list_tools_sync())
             agent = Agent(
-                model=model,
+                model=get_model(),
                 tools=tools,
                 hooks=[memory_hook],
                 system_prompt=SYSTEM_PROMPT,
             )
             result = agent(user_input)
-        return result.message["content"][0]["text"]
-    except Exception as e:
+        return _response_text(result)
+    except Exception as e:  # entrypoint must never crash the runtime
         logger.exception("invoke failed")
         return f"Error handling request: {e}"
 ```
 
-`browser.browser` is the Strands tool exposed by `AgentCoreBrowser`; confirmed present as the
-`.browser` attribute in `strands-agents-tools 0.8.12`
-(`AgentCoreBrowser(region=..., identifier=None, session_timeout=3600)`). Response extraction uses
-the Strands `AgentResult.message` content blocks; the first text block is returned.
+**Browser tool caveat (important).** The starter's `AgentCoreBrowser` lives in
+`strands_tools.browser`, which was **removed in `strands-agents-tools` 0.9.0** (confirmed by the
+Wave 1 deploy incident: the deployed runtime resolved 0.9.0 and crashed on import). Two consequences
+baked into this design:
+1. `pyproject.toml` pins `strands-agents-tools>=0.2.21,<0.9.0` so deploy == local and the
+   `AgentCoreBrowser` path keeps working.
+2. The browser tool is wired via a lazy `_browser_tools()` helper that imports
+   `strands_tools.browser.AgentCoreBrowser` only when invoked; if the import is unavailable it logs
+   and returns `[]` (graceful degradation) instead of breaking the agent. Wave 4 decides whether to
+   stay pinned or migrate to `bedrock_agentcore.tools.browser_client.BrowserClient` + Playwright.
+
+Response extraction uses `_response_text()` over the Strands `AgentResult.message` content blocks
+(first text block), guarded against shape changes.
 
 ### System prompt (design intent)
 

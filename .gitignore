@@ -12,3 +12,4 @@ dist/
 
 # AgentCore toolkit local config (optional — contains deployment IDs, not secrets)
 # .bedrock_agentcore.yaml
+starter/.bedrock_agentcore/*

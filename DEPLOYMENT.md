@@ -116,7 +116,52 @@ Resulting resource IDs recorded here (no secrets).
 
 ## 5. Deploy, permissions, tests
 
-_To be filled in Wave 8._
+### Wave 1 cloud validation (first real deploy)
+
+- Agent name: `cs_support_agent`
+- Agent ARN: `arn:aws:bedrock-agentcore:us-east-1:024333017526:runtime/cs_support_agent-yMZc9TGr2D`
+- Execution role (auto-created): `AmazonBedrockAgentCoreSDKRuntime-us-east-1-50dd5f9114`
+- Source S3 bucket (auto-created): `bedrock-agentcore-codebuild-sources-024333017526-us-east-1`
+- Deployment type: `direct_code_deploy`, runtime `python3.13`, platform `linux/arm64`, memory disabled.
+
+Config/deploy commands used:
+
+```bash
+agentcore configure --entrypoint main.py --name cs_support_agent \
+  --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory \
+  --region us-east-1 --non-interactive
+agentcore deploy
+agentcore status            # Endpoint DEFAULT (READY)
+agentcore invoke '{"prompt": "Hello, what can you help me with?", "customer_id": "CUST-123", "session_id": "test-1"}'
+```
+
+Result: `agentcore invoke` returned a coherent Nova Lite response listing the agent's
+capabilities. Wave 1 validated in the cloud.
+
+### Incident & fix — runtime init crash on first deploy
+
+First deploy succeeded but `invoke` failed with `RuntimeClientError: Runtime initialization time
+exceeded`. CloudWatch logs showed the real cause: an **import crash**, not a timeout —
+
+```
+ImportError: browser was removed in v0.9.0 ... (strands_tools.browser)
+```
+
+Root cause: `pyproject.toml` pinned `strands-agents-tools>=0.2.21`, so the deployed runtime
+resolved `0.9.0` (which removed `strands_tools.browser.AgentCoreBrowser`), while the local venv had
+`0.8.12`. The top-level `from strands_tools.browser import AgentCoreBrowser` crashed module import.
+
+Fix (two parts):
+1. Pin `strands-agents-tools>=0.2.21,<0.9.0` in `pyproject.toml` so deploy == local.
+2. Refactor `main.py` to **lazy imports + lazy client init**: the browser/MCP/code-interpreter
+   imports moved inside the functions that use them (Waves 3–5), and `model`/`memory_client`/
+   `_bedrock_runtime` became cached accessors (`get_model()`, `get_memory_client()`,
+   `get_bedrock_runtime()`). Module import is now fast and cannot be broken by an optional
+   dependency. Added `starter/.dockerignore` to keep `.venv` (436 MB) out of the bundle.
+
+Follow-up for Wave 4: the starter's `AgentCoreBrowser` is gone in `strands-agents-tools >=0.9.0`.
+We stay pinned `<0.9.0` for now; at Wave 4 decide whether to remain pinned or move to
+`bedrock_agentcore.tools.browser_client.BrowserClient` + Playwright.
 
 ```bash
 # full lifecycle (all code)
@@ -138,3 +183,18 @@ python -m infra.destroy
 - **Wave 0** — spec committed; `.gitignore`; `config.yaml`, `system_prompt.txt`, `ruff.toml`,
   `sync_config.py` (ruff-clean, idempotent, verified); docs (`DEPLOYMENT.md`, `starter/README.md`,
   root README banner, `docs/ARCHITECTURE.md`). No `main.py` logic yet.
+- **Wave 1** — runnable skeleton. Implemented `load_config()` (safe-fallback YAML loader),
+  TODO 1 (`app = BedrockAgentCoreApp()`), TODO 2 (literals synced from config + `GATEWAY_URL` from
+  config), TODO 3 (model/clients + externalized `SYSTEM_PROMPT` loader), and a minimal TODO 8
+  entrypoint (validate prompt, uuid session fallback, identifier logging, tool-less Agent, defensive
+  response extraction, specific-exception handling). Not-yet-implemented TODO 4/7 stubs converted to
+  `NotImplementedError` to keep ruff green. Verified: `ruff check main.py` clean; `py_compile` OK;
+  imports OK; local smoke invoke returned a coherent Nova Lite response; missing-prompt guard works.
+  Deployable/runnable checkpoint met (tools/memory arrive in Waves 2–6).
+  - Refinement: `_DEFAULT_CONFIG` replaced by `_MINIMAL_DEFAULTS` (only model_id/region/
+    system_prompt_path) so `config.yaml` is the sole source of truth and the Python dict is just a
+    start-up safety net; TODO 2 comments clarified (three literals are a `sync_config.py`-generated
+    mirror of config.yaml because setup_permissions.py AST-reads them; `GATEWAY_URL` read from YAML).
+  - Cloud fix: lazy imports + lazy client init (`get_model`/`get_memory_client`/`get_bedrock_runtime`);
+    pinned `strands-agents-tools<0.9.0`; added `.dockerignore`. Deployed and invoked successfully
+    (ARN `cs_support_agent-yMZc9TGr2D`). See §5 for the incident writeup.

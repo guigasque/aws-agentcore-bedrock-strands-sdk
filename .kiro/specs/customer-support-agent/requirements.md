@@ -332,6 +332,11 @@ readable, resilient, idempotent, observable, and lint-clean — not merely rubri
 6. Network operations SHALL set timeouts where the SDK permits (gateway connect, browser session).
 7. No secrets SHALL appear in code, config, logs, or the committed repo; least-privilege IAM via the
    provided `setup_permissions.py` policy SHALL be used unchanged.
+8. Deployed dependencies SHALL be pinned to the versions verified locally where an API is relied on
+   (e.g. `strands-agents-tools>=0.2.21,<0.9.0`), because `direct_code_deploy` re-resolves from
+   `pyproject.toml`; and module import SHALL stay cheap and crash-proof (lazy client/model creation,
+   heavy/optional/version-sensitive imports performed inside the functions that use them) so the
+   runtime always initializes within its init window.
 
 ### Requirement 13 — Externalized configuration (no magic values)
 

@@ -1,0 +1,10 @@
+# Keep the direct_code_deploy bundle small and clean.
+.venv/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+.bedrock_agentcore.yaml
+.env
+.env.*
+.ruff_cache/
