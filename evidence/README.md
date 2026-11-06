@@ -228,6 +228,9 @@ about).
   before it reaches the user.
 - **Reproducible, reversible** — pinned dependencies, idempotent provisioning, one-command teardown.
 
+Where this would go next under real traffic — latency, scaling, and cost — is written up in
+[`../docs/PRODUCTION.md`](../docs/PRODUCTION.md).
+
 ---
 
 ## Reproduce the tests

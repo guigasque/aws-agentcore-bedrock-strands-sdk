@@ -252,4 +252,5 @@ agentcore destroy && python -m infra.destroy
 - **See the diagrams:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - **Run / deploy it:** [`../starter/README.md`](../starter/README.md)
 - **What's been built, wave by wave:** [`../DEPLOYMENT.md`](../DEPLOYMENT.md) (§6 build log)
+- **Taking it to production (perf, scale, cost):** [`PRODUCTION.md`](PRODUCTION.md)
 - **Requirements & tasks:** `../.kiro/specs/customer-support-agent/requirements.md` and `tasks.md`
