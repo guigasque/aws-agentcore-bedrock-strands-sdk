@@ -167,8 +167,33 @@ agentcore invoke '{"prompt": "Hello, what can you help me with?", "customer_id":
 Result: `agentcore invoke` returned a coherent Nova Lite response listing the agent's
 capabilities. Wave 1 validated in the cloud.
 
-### Incident & fix — runtime init crash on first deploy
+### Wave 3 cloud validation — T3 + T5 (redeploy)
 
+Redeployed to pick up the Wave 2 KB tool and Wave 3 loyalty tool, then granted permissions.
+
+Permissions nuance: the provided `setup_permissions.py` refuses to run until `MEMORY_ID` is a real
+literal (Memory arrives in Wave 6) and does not grant the Code Interpreter. To unblock RAG and
+discount math now — without modifying the provided script — we added
+`infra/agent_permissions.py` (idempotent), which attaches an inline policy to the runtime role
+granting **Code Interpreter** (`StartCodeInterpreterSession`/`InvokeCodeInterpreter`/… on
+`code-interpreter/*` + `aws.codeinterpreter.v1`) and, while Memory is absent, **`bedrock:Retrieve`**
+on the KB. Once Memory lands, `setup_permissions.py` becomes the source of truth.
+
+```bash
+agentcore deploy
+python -m infra.agent_permissions    # Code Interpreter + KB Retrieve (idempotent)
+agentcore invoke '{"prompt": "What are the benefits of the Platinum loyalty tier?", ...}'   # T3
+agentcore invoke '{"prompt": "I am a Gold member with 4250 points. Calculate my discount on a $150 standard order.", ...}'  # T5
+```
+
+Results (deployed agent `cs_support_agent-yMZc9TGr2D`):
+- **T3 PASSED** — grounded answer: free same-day shipping, 15% discount, priority customer support,
+  5,000-point threshold, earn rates 1/2/5 per $1 (from the catalog, not guessed).
+- **T5 PASSED** — live Code Interpreter sandbox: final $99.00, 4,000 points redeemed, $11 tier
+  discount, $51 savings, 99 earned, 349 remaining (not the fallback).
+- Idempotency confirmed (running `infra.agent_permissions` twice is a no-op; legacy policy removed).
+
+### Incident & fix — runtime init crash on first deploy
 First deploy succeeded but `invoke` failed with `RuntimeClientError: Runtime initialization time
 exceeded`. CloudWatch logs showed the real cause: an **import crash**, not a timeout —
 
@@ -235,3 +260,13 @@ python -m infra.destroy
   not-configured message; live smoke — the model *called the tool* for a policy question and degraded
   gracefully (no hallucinated policy) since the KB is not provisioned yet. Full T3 passes once the KB
   exists (Wave I).
+- **Wave 3** — Loyalty discount calculator (TODO 7). Implemented `calculate_loyalty_discount(...)`:
+  builds a self-contained Python snippet with config-driven rates (earn/tier rates, floor-to-500,
+  50% cap, 100 pts/$), runs it via `code_session(REGION).invoke("executeCode", ...)`, returns the
+  first result event as JSON; tier-only fallback on failure (never raises); all required fields
+  present; lazy import of `code_session`; INFO log. Wired into the entrypoint tools list. Verified:
+  ruff clean; compile OK; **arithmetic verified** — T5 (Gold/4250/$150 standard) → final 99.00,
+  4000 points redeemed, 349 remaining. **Cloud-verified (redeploy):** T5 ran the live Code
+  Interpreter sandbox (not the fallback) and returned $99.00; Code Interpreter access granted to the
+  runtime role via `infra/agent_permissions.py` (setup_permissions.py is gated on Memory and omits
+  Code Interpreter). T3 also re-verified in the cloud once KB Retrieve was granted the same way.

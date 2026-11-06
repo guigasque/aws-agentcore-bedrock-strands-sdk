@@ -25,8 +25,9 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 **Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
 
 **Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ (deployed, cloud-verified) ·
-Wave 2 ✅ (T3 passing) · Wave I: KB layer ✅ (I.1, I.2 KB-role, I.5–I.7, I.10, provision_kb) ·
-Next: Wave 3 (loyalty calculator).
+Wave 2 ✅ (T3 passing, cloud-verified) · Wave 3 ✅ (T5 passing, cloud-verified) ·
+Wave I: KB layer ✅ + `agent_permissions` (Code Interpreter + KB Retrieve) ✅ ·
+Next: Wave 4 (browser tool).
 
 ---
 
@@ -101,19 +102,21 @@ _Fills: TODO 6; adds the tool to the entrypoint tools list._
 _Commit: `feat(todo7): loyalty discount calculator (code interpreter)`_
 _Fills: TODO 7; adds the tool to the entrypoint tools list._
 
-- [ ] 3.1 TODO 7 — build the self-contained f-string code (`earn_rates`, `tier_rates`,
+- [x] 3.1 TODO 7 — build the self-contained f-string code (`earn_rates`, `tier_rates`,
   points-floor-to-500 + 50%-cap, tier discount, totals, earned/remaining, `print(json.dumps(...))`).
+  Rates injected from `config.yaml`. **DONE.**
   - _Requirements: 7.2, 7.3_
-- [ ] 3.2 Execute via `code_session(REGION).invoke("executeCode", {"language":"python",
-  "clearContext":True,"code":code})`; return first `event["result"]` as JSON string.
+- [x] 3.2 Execute via `code_session(REGION).invoke("executeCode", {"language":"python",
+  "clearContext":True,"code":code})`; return first `event["result"]` as JSON string. Lazy import. **DONE.**
   - _Requirements: 7.1, 7.4_
-- [ ] 3.3 Tier-only fallback on failure (never raise); ensure all required fields present
+- [x] 3.3 Tier-only fallback on failure (never raise); all required fields present
   (`points_redeemed`, `tier_discount`(+rate), `final_total`, `total_savings`, `points_earned`,
-  `remaining_points`).
+  `remaining_points`). **DONE (fallback exercised when local role lacked Code Interpreter).**
   - _Requirements: 7.5, 7.6 — Rubric 5_
-- [ ] 3.4 Add tool to entrypoint; verify compile + deploy; T5 — Gold/4250/$150 standard →
-  expect final `99.00`, 10% tier, 4000 redeemed, 349 remaining.
-  - _Test: T5 (Code Interpreter is account-level; no custom infra)._
+- [x] 3.4 Add tool to entrypoint; ruff+compile; **deployed + T5 PASSED in cloud** — Gold/4250/$150
+  standard → final `99.00`, 10% tier, 4000 redeemed, 349 remaining (live sandbox, not fallback).
+  Required granting Code Interpreter to the runtime role via `infra/agent_permissions.py`.
+  - _Test: T5 — DONE._
 
 ---
 

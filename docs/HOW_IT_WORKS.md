@@ -14,7 +14,7 @@ how to run it is [`../starter/README.md`](../starter/README.md); the operational
 |---|---|---|
 | Deployable cloud agent | `BedrockAgentCoreApp` + `@app.entrypoint`, Nova 2 Lite | ✅ Wave 1 |
 | Product/policy answers (RAG) | `search_knowledge_base` → Bedrock KB (S3 Vectors) | ✅ Wave 2 |
-| Exact loyalty discounts | `calculate_loyalty_discount` → Code Interpreter | 🔜 Wave 3 |
+| Exact loyalty discounts | `calculate_loyalty_discount` → Code Interpreter | ✅ Wave 3 |
 | Live web browsing | AgentCore Browser tool | 🔜 Wave 4 |
 | Order tracking & refunds | AgentCore Gateway (MCP) → Lambda/API Gateway | 🔜 Wave 5 |
 | Cross-session memory | `MemoryHook` → AgentCore Memory | 🔜 Wave 6 |
@@ -97,15 +97,24 @@ Amazon Titan Text Embeddings v2, and stores the vectors in an **S3 Vectors** ind
 answers the Platinum-tier question with free same-day shipping, 15% discount, and priority support
 (Test T3).
 
-### 3.2 Exact loyalty discounts — Code Interpreter 🔜 (Wave 3)
+### 3.2 Exact loyalty discounts — Code Interpreter ✅ (Wave 3)
 
-**What (planned):** compute points redeemed, tier discount, final total, and remaining points
-*exactly*, instead of trusting the model's mental arithmetic.
+**What:** compute points redeemed, tier discount, final total, and remaining points *exactly*,
+instead of trusting the model's mental arithmetic.
 
-**How (planned):** `calculate_loyalty_discount(...)` builds a self-contained Python snippet encoding
-the loyalty rules (earn rates, tier rates, 500-point floor, 50%-of-order cap — all from
-`config.yaml`), runs it in the AgentCore **Code Interpreter** sandbox, and returns a structured
-result. If the sandbox is unavailable, it falls back to a tier-only calculation (never raises).
+**How:** `calculate_loyalty_discount(...)` builds a self-contained Python snippet encoding the
+loyalty rules (earn rates, tier rates, 500-point floor, 50%-of-order cap — all from `config.yaml`),
+runs it in the AgentCore **Code Interpreter** sandbox via `code_session(REGION).invoke("executeCode",
+...)`, and returns a structured JSON result. If the sandbox is unavailable it falls back to a
+tier-only calculation (never raises).
+
+**Permissions note:** the Code Interpreter needs `bedrock-agentcore:*CodeInterpreter*` on the
+runtime role. The provided `setup_permissions.py` does not grant this (and is gated on Memory), so
+`infra/agent_permissions.py` grants it separately (idempotent).
+
+**Verified (cloud, T5):** Gold / 4250 pts / $150 standard → 4,000 points redeemed, 10% tier
+discount ($11), **final $99.00**, $51 saved, 99 earned, 349 remaining — from the live sandbox, not
+the fallback.
 
 ### 3.3 Live web browsing — Browser tool 🔜 (Wave 4)
 

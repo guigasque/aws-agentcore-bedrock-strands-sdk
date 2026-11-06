@@ -361,8 +361,92 @@ def calculate_loyalty_discount(
     Returns:
         Full discount breakdown and final price
     """
-    # TODO: Implemented in Wave 3 (Code Interpreter) with a tier-only fallback.
-    raise NotImplementedError("calculate_loyalty_discount is implemented in Wave 3.")
+    loyalty_cfg = _CFG.get("loyalty", {})
+    earn_rates = loyalty_cfg.get("earn_rates", {"standard": 1, "device": 2, "fresh": 5})
+    tier_rates = loyalty_cfg.get("tier_rates", {"Silver": 0.0, "Gold": 0.10, "Platinum": 0.15})
+    points_per_dollar = loyalty_cfg.get("points_per_dollar", 100)
+    min_redemption = loyalty_cfg.get("min_redemption", 500)
+    max_redeem_fraction = loyalty_cfg.get("max_redeem_fraction", 0.5)
+
+    logger.info(
+        "calculate_loyalty_discount points=%s tier=%s total=%s category=%s",
+        loyalty_points, tier, order_total, product_category,
+    )
+
+    # Self-contained snippet executed in the sandbox. Config-driven values are
+    # injected as literals so the code needs no external state.
+    code = f"""
+import json
+
+earn_rates = {earn_rates!r}
+tier_rates = {tier_rates!r}
+points_per_dollar = {points_per_dollar}
+min_redemption = {min_redemption}
+max_redeem_fraction = {max_redeem_fraction}
+
+loyalty_points = {int(loyalty_points)}
+tier = {tier!r}
+order_total = float({float(order_total)})
+product_category = {product_category!r}
+
+# Points redeemed: floor to a multiple of min_redemption, capped so their dollar
+# value never exceeds max_redeem_fraction of the order.
+usable_points = (loyalty_points // min_redemption) * min_redemption
+max_point_value = order_total * max_redeem_fraction
+point_value = min(usable_points / points_per_dollar, max_point_value)
+points_redeemed = int(round(point_value * points_per_dollar))
+
+subtotal_after_points = order_total - point_value
+tier_rate = tier_rates.get(tier, 0.0)
+tier_discount = round(subtotal_after_points * tier_rate, 2)
+final_total = round(subtotal_after_points - tier_discount, 2)
+total_savings = round(order_total - final_total, 2)
+points_earned = int(final_total * earn_rates.get(product_category, 1))
+remaining_points = loyalty_points - points_redeemed + points_earned
+
+print(json.dumps({{
+    "order_total": round(order_total, 2),
+    "tier": tier,
+    "tier_discount_rate": tier_rate,
+    "points_redeemed": points_redeemed,
+    "points_value_applied": round(point_value, 2),
+    "tier_discount": tier_discount,
+    "final_total": final_total,
+    "total_savings": total_savings,
+    "points_earned": points_earned,
+    "remaining_points": remaining_points,
+}}))
+"""
+
+    try:
+        # Lazy import keeps module import light and crash-proof.
+        from bedrock_agentcore.tools.code_interpreter_client import code_session
+
+        with code_session(REGION) as sandbox:
+            response = sandbox.invoke(
+                "executeCode",
+                {"language": "python", "clearContext": True, "code": code},
+            )
+            for event in response["stream"]:
+                return json.dumps(event["result"])
+        return json.dumps({"error": "Code Interpreter returned no result."})
+    except Exception as error:  # fall back to a tier-only calculation; never raise
+        logger.warning("Code Interpreter unavailable (%s); using tier-only fallback.", error)
+        tier_rate = tier_rates.get(tier, 0.0)
+        tier_discount = round(float(order_total) * tier_rate, 2)
+        final_total = round(float(order_total) - tier_discount, 2)
+        return json.dumps({
+            "order_total": round(float(order_total), 2),
+            "tier": tier,
+            "tier_discount_rate": tier_rate,
+            "points_redeemed": 0,
+            "tier_discount": tier_discount,
+            "final_total": final_total,
+            "total_savings": tier_discount,
+            "points_earned": int(final_total * earn_rates.get(product_category, 1)),
+            "remaining_points": int(loyalty_points),
+            "note": "Code Interpreter unavailable; tier discount only.",
+        })
 
 
 # ── TODO 8 — Agent Entrypoint ─────────────────────────────────────────────────
@@ -401,7 +485,7 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         session_id = (payload or {}).get("session_id") or str(uuid.uuid4())
         logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
 
-        tools: list = [search_knowledge_base]  # Wave 2+ append tools here.
+        tools: list = [search_knowledge_base, calculate_loyalty_discount]
 
         agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
         result = agent(user_input)
