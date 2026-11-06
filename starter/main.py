@@ -1,14 +1,19 @@
 """
-Customer Support AI Agent — Starter Code
-==========================================
-Your task is to complete this file by implementing all sections marked
-with # TODO comments.
+Customer Support AI Agent — Amazon Bedrock AgentCore + Strands
+================================================================
+A conversational customer support agent for an e-commerce platform. Capabilities:
+  - Order tracking & refunds via the AgentCore Gateway (MCP → Lambda/API Gateway)
+  - Grounded product/policy answers via a Bedrock Knowledge Base (RAG)
+  - Cross-session memory via AgentCore Memory (facts + preferences)
+  - Exact loyalty-discount math via the AgentCore Code Interpreter
+  - Live web browsing via the AgentCore Browser tool
 
-Reference the project instructions and rubric for guidance.
-Work through each section yourself.
+Configuration lives in config.yaml (single source of truth). REGION, KB_ID and
+MEMORY_ID are mirrored into the literals below by sync_config.py because
+setup_permissions.py AST-reads them. See ../docs/HOW_IT_WORKS.md for the full picture.
 
-Run locally (after filling in config values):
-  uv run main.py '{"prompt": "Hello", "customer_id": "CUST-123", "session_id": "s1"}'
+Local test (temporarily switch __main__ to main()):
+  python main.py '{"prompt": "Hello", "customer_id": "CUST-123", "session_id": "s1"}'
 
 Deploy to AgentCore:
   agentcore deploy

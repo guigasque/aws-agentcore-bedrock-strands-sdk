@@ -25,9 +25,8 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 **Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
 
 **Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ · Wave 2 ✅ (T3) · Wave 3 ✅ (T5) ·
-Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) · Wave 6 ✅ (T4) — **ALL SIX TESTS PASSING, cloud-verified** ·
-Wave I: KB + Gateway + Memory layers ✅ · Next: Wave 7 (final config/prompt polish), then Wave 8
-(evidence capture + reflection), Wave 9 (package).
+Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) · Wave 6 ✅ (T4) — **ALL SIX TESTS PASSING, cloud-verified** · Wave 7 ✅ (config/prompt polish) ·
+Wave I: KB + Gateway + Memory layers ✅ · Next: Wave 8 (evidence capture + reflection), Wave 9 (package).
 
 ---
 
@@ -184,15 +183,16 @@ _Fills: TODO 4 + TODO 5; wires `hooks=[memory_hook]` into the Agent._
 ## Wave 7 — Final config + system prompt polish
 _Commit: `feat(todo2): real resource IDs + finalized system prompt`_
 
-- [ ] 7.1 TODO 2 — real `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` are written by `infra.outputs` into
-  `config.yaml` and mirrored into `main.py` by `sync_config.py` (no manual editing). Verify they
-  are present and shape-valid.
+- [x] 7.1 TODO 2 — real `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` written by infra provisioners into
+  `config.yaml` and mirrored into `main.py` by `sync_config.py` (no manual editing). Verified present
+  and shape-valid (KB_ID=YPXPQVRBJX, MEMORY_ID=CustomerSupportMemory-V31S5N77HY, gateway_url set). **DONE.**
   - _Requirements: 2.1-2.4, 13.3, 15.5_
-- [ ] 7.2 Finalize `SYSTEM_PROMPT` (role, all tools, usage rules: KB for product/policy/loyalty-program
-  & product recommendations; calculator for discount math; order tools with `customer_id`; concise).
+- [x] 7.2 Finalize `SYSTEM_PROMPT` (role, all tools, usage rules) + refund-amount lookup nudge;
+  updated the module header docstring (removed stale "starter/TODO" + `uv` references). **DONE.**
   - _Requirements: 8.5_
-- [ ] 7.3 Static sweep: no `= None  # Replace this line`, no bare TODO `pass`, no leftover `<...>`;
-  `ruff check`; `python -m py_compile main.py`; `python setup_permissions.py --dry-run`.
+- [x] 7.3 Static sweep: no `= None  # Replace this line`, no bare TODO `pass`, no `NotImplementedError`,
+  no leftover `<...>` except the intentional GATEWAY_URL fallback default; `ruff check` clean;
+  `python -m py_compile` OK; `setup_permissions.py --dry-run` validates the literals. **DONE.**
   - _Requirements: 10.1, 2.4, 12.5_
 
 ---

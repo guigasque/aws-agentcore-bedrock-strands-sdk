@@ -353,3 +353,12 @@ python -m infra.destroy
   consistent, ~60-90s); re-running after extraction succeeded. With MEMORY_ID real,
   `setup_permissions.py` now runs as the authoritative KB/Memory/Browser grant.
 - **ALL SIX TESTS PASSING (T1–T6). Agent functionally complete.**
+- **Wave 7** — Final config + prompt polish. Verified all config IDs are real and synced
+  (KB_ID, MEMORY_ID, gateway_url); no placeholders/`pass`/`None`/`NotImplementedError`/TODO stubs
+  remain in `main.py` (only the intentional `<gateway_url>` fallback default). Updated the module
+  header docstring (removed stale "starter/complete the TODOs" + `uv` references) and added a
+  system-prompt nudge to look up the order before refunding (so the refund amount isn't $0).
+  `ruff` clean, `py_compile` OK, `setup_permissions.py --dry-run` validates. A redeploy applies the
+  prompt change (optional — all tests already pass). **Redeployed + re-validated:** T2 now returns
+  the correct refund amount **$139.99** (was $0) — the agent looks up ORD-002 before refunding;
+  T1 and T5 re-confirmed with no regression.
