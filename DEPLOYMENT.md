@@ -270,3 +270,13 @@ python -m infra.destroy
   Interpreter sandbox (not the fallback) and returned $99.00; Code Interpreter access granted to the
   runtime role via `infra/agent_permissions.py` (setup_permissions.py is gated on Memory and omits
   Code Interpreter). T3 also re-verified in the cloud once KB Retrieve was granted the same way.
+- **Wave 4** — Browser tool (part of TODO 8). Added `_browser_tools()`: lazily imports
+  `strands_tools.browser.AgentCoreBrowser` (pinned `<0.9.0`), instantiates with region +
+  `config.yaml:browser.session_timeout`, returns `[browser.browser]`; on ImportError/failure logs
+  and returns `[]` (graceful). Wired into the entrypoint tools list. Extended
+  `infra/agent_permissions.py` with the Browser statement (StartBrowserSession/StopBrowserSession/
+  GetBrowserSession/UpdateBrowserStream/ConnectBrowserAutomationStream on `browser/aws.browser.v1`).
+  Verified: ruff clean; compile OK; `_browser_tools()` loads the `browser` tool locally. **Cloud T6
+  PASSED** — "Go to https://www.udacity.com and tell me the page title" → *"Learn the Latest Tech
+  Skills; Advance Your Career | Udacity"* (live fetch). Note: first attempt failed with a
+  browser-session permission error until the Browser grant was re-run after deploy.

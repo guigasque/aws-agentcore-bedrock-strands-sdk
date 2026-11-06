@@ -4,9 +4,9 @@ The provided setup_permissions.py (which must not be modified) grants KB Retriev
 Memory, and Browser — but it refuses to run until MEMORY_ID exists (Wave 6), and it
 does not grant the AgentCore Code Interpreter the loyalty tool uses. This module
 attaches a separate, least-privilege inline policy to the same runtime execution role
-(read from .bedrock_agentcore.yaml) covering Code Interpreter and — while Memory is
-not yet provisioned — KB Retrieve, so RAG and discount math work in the cloud now.
-Once Memory lands, setup_permissions.py becomes the source of truth.
+(read from .bedrock_agentcore.yaml) covering Code Interpreter, the Browser tool, and — while
+Memory is not yet provisioned — KB Retrieve, so RAG, discount math, and web browsing work in the
+cloud now. Once Memory lands, setup_permissions.py becomes the source of truth.
 
 Run: python -m infra.agent_permissions   (after `agentcore deploy`)
 Idempotent: re-running just re-puts the inline policy.
@@ -66,7 +66,19 @@ def _policy(acct: str, kb_id: str | None) -> dict:
                 f"arn:aws:bedrock-agentcore:{REGION}:{acct}:code-interpreter/*",
                 f"arn:aws:bedrock-agentcore:{REGION}:aws:code-interpreter/aws.codeinterpreter.v1",
             ],
-        }
+        },
+        {
+            "Sid": "Browser",
+            "Effect": "Allow",
+            "Action": [
+                "bedrock-agentcore:StartBrowserSession",
+                "bedrock-agentcore:StopBrowserSession",
+                "bedrock-agentcore:GetBrowserSession",
+                "bedrock-agentcore:UpdateBrowserStream",
+                "bedrock-agentcore:ConnectBrowserAutomationStream",
+            ],
+            "Resource": f"arn:aws:bedrock-agentcore:{REGION}:aws:browser/aws.browser.v1",
+        },
     ]
     if kb_id:
         statements.append(
@@ -99,7 +111,7 @@ def apply(agent: str | None = None) -> int:
         PolicyName=POLICY_NAME,
         PolicyDocument=json.dumps(_policy(acct, kb_id)),
     )
-    granted = "Code Interpreter" + (f" + KB Retrieve ({kb_id})" if kb_id else "")
+    granted = "Code Interpreter + Browser" + (f" + KB Retrieve ({kb_id})" if kb_id else "")
     logger.info("Attached %s to role %s: %s.", POLICY_NAME, role_name, granted)
     return 0
 

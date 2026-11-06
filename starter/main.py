@@ -376,47 +376,47 @@ def calculate_loyalty_discount(
     # Self-contained snippet executed in the sandbox. Config-driven values are
     # injected as literals so the code needs no external state.
     code = f"""
-import json
+        import json
 
-earn_rates = {earn_rates!r}
-tier_rates = {tier_rates!r}
-points_per_dollar = {points_per_dollar}
-min_redemption = {min_redemption}
-max_redeem_fraction = {max_redeem_fraction}
+        earn_rates = {earn_rates!r}
+        tier_rates = {tier_rates!r}
+        points_per_dollar = {points_per_dollar}
+        min_redemption = {min_redemption}
+        max_redeem_fraction = {max_redeem_fraction}
 
-loyalty_points = {int(loyalty_points)}
-tier = {tier!r}
-order_total = float({float(order_total)})
-product_category = {product_category!r}
+        loyalty_points = {int(loyalty_points)}
+        tier = {tier!r}
+        order_total = float({float(order_total)})
+        product_category = {product_category!r}
 
-# Points redeemed: floor to a multiple of min_redemption, capped so their dollar
-# value never exceeds max_redeem_fraction of the order.
-usable_points = (loyalty_points // min_redemption) * min_redemption
-max_point_value = order_total * max_redeem_fraction
-point_value = min(usable_points / points_per_dollar, max_point_value)
-points_redeemed = int(round(point_value * points_per_dollar))
+        # Points redeemed: floor to a multiple of min_redemption, capped so their dollar
+        # value never exceeds max_redeem_fraction of the order.
+        usable_points = (loyalty_points // min_redemption) * min_redemption
+        max_point_value = order_total * max_redeem_fraction
+        point_value = min(usable_points / points_per_dollar, max_point_value)
+        points_redeemed = int(round(point_value * points_per_dollar))
 
-subtotal_after_points = order_total - point_value
-tier_rate = tier_rates.get(tier, 0.0)
-tier_discount = round(subtotal_after_points * tier_rate, 2)
-final_total = round(subtotal_after_points - tier_discount, 2)
-total_savings = round(order_total - final_total, 2)
-points_earned = int(final_total * earn_rates.get(product_category, 1))
-remaining_points = loyalty_points - points_redeemed + points_earned
+        subtotal_after_points = order_total - point_value
+        tier_rate = tier_rates.get(tier, 0.0)
+        tier_discount = round(subtotal_after_points * tier_rate, 2)
+        final_total = round(subtotal_after_points - tier_discount, 2)
+        total_savings = round(order_total - final_total, 2)
+        points_earned = int(final_total * earn_rates.get(product_category, 1))
+        remaining_points = loyalty_points - points_redeemed + points_earned
 
-print(json.dumps({{
-    "order_total": round(order_total, 2),
-    "tier": tier,
-    "tier_discount_rate": tier_rate,
-    "points_redeemed": points_redeemed,
-    "points_value_applied": round(point_value, 2),
-    "tier_discount": tier_discount,
-    "final_total": final_total,
-    "total_savings": total_savings,
-    "points_earned": points_earned,
-    "remaining_points": remaining_points,
-}}))
-"""
+        print(json.dumps({{
+            "order_total": round(order_total, 2),
+            "tier": tier,
+            "tier_discount_rate": tier_rate,
+            "points_redeemed": points_redeemed,
+            "points_value_applied": round(point_value, 2),
+            "tier_discount": tier_discount,
+            "final_total": final_total,
+            "total_savings": total_savings,
+            "points_earned": points_earned,
+            "remaining_points": remaining_points,
+        }}))
+    """
 
     try:
         # Lazy import keeps module import light and crash-proof.
@@ -447,6 +447,24 @@ print(json.dumps({{
             "remaining_points": int(loyalty_points),
             "note": "Code Interpreter unavailable; tier discount only.",
         })
+
+
+# ── Browser tool (lazy, graceful) ─────────────────────────────────────────────
+# The AgentCore browser tool is imported lazily so a missing/incompatible optional
+# dependency can never break module import. Note: strands_tools.browser was removed
+# in strands-agents-tools 0.9.0 — we pin <0.9.0 (see pyproject.toml). If the import
+# is unavailable, we log and return [] so the agent still runs without web browsing.
+def _browser_tools() -> list:
+    """Return the AgentCore browser tool as a one-item list, or [] if unavailable."""
+    try:
+        from strands_tools.browser import AgentCoreBrowser
+
+        timeout = _CFG.get("browser", {}).get("session_timeout", 3600)
+        browser = AgentCoreBrowser(region=REGION, session_timeout=timeout)
+        return [browser.browser]
+    except Exception as error:  # ImportError or construction failure — degrade gracefully
+        logger.warning("Browser tool unavailable (%s); continuing without web browsing.", error)
+        return []
 
 
 # ── TODO 8 — Agent Entrypoint ─────────────────────────────────────────────────
@@ -486,6 +504,7 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
 
         tools: list = [search_knowledge_base, calculate_loyalty_discount]
+        tools += _browser_tools()  # AgentCore browser (lazy; [] if unavailable)
 
         agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
         result = agent(user_input)

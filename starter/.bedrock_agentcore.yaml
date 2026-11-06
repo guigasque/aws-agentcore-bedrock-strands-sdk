@@ -32,7 +32,7 @@ agents:
     bedrock_agentcore:
       agent_id: cs_support_agent-yMZc9TGr2D
       agent_arn: arn:aws:bedrock-agentcore:us-east-1:024333017526:runtime/cs_support_agent-yMZc9TGr2D
-      agent_session_id: f426b71e-67c8-4308-9584-e3daabb0130f
+      agent_session_id: 9325d746-0b6e-44aa-aa49-5a2c39c8800b
     codebuild:
       project_name: null
       execution_role: null

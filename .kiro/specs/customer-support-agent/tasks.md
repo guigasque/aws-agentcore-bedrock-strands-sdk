@@ -24,10 +24,9 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 
 **Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
 
-**Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ (deployed, cloud-verified) ·
-Wave 2 ✅ (T3 passing, cloud-verified) · Wave 3 ✅ (T5 passing, cloud-verified) ·
-Wave I: KB layer ✅ + `agent_permissions` (Code Interpreter + KB Retrieve) ✅ ·
-Next: Wave 4 (browser tool).
+**Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ · Wave 2 ✅ (T3) · Wave 3 ✅ (T5) ·
+Wave 4 ✅ (T6) — all cloud-verified · Wave I: KB layer ✅ + `agent_permissions`
+(Code Interpreter + Browser + KB Retrieve) ✅ · Next: Wave 5 (MCP gateway — orders & refunds).
 
 ---
 
@@ -130,13 +129,14 @@ _Fills: browser portion of TODO 8._
 > (b) migrate to `bedrock_agentcore.tools.browser_client.BrowserClient` + Playwright in a custom
 > `@tool`. Default: (a) for now; revisit if the pin becomes a problem.
 
-- [ ] 4.1 Implement `_browser_tools()`: lazily import `AgentCoreBrowser`, instantiate with
+- [x] 4.1 Implement `_browser_tools()`: lazily import `AgentCoreBrowser`, instantiate with
   `region=REGION` and `session_timeout` from config, return `[browser.browser]`; on ImportError log
-  and return `[]` (graceful degradation). Entrypoint already calls it (Wave 1 wiring).
+  and return `[]` (graceful degradation). Entrypoint calls it. **DONE.**
   - _Requirements: 8.3, 8.4, 12.1, 12.2 — Rubric 6_
-- [ ] 4.2 Verify ruff + compile + deploy; T6 — `https://www.udacity.com` → page title from the live
-  site.
-  - _Test: T6 (browser is account-level; needs browser IAM from setup_permissions)._
+- [x] 4.2 ruff + compile; **deployed + T6 PASSED in cloud** — `https://www.udacity.com` → page title
+  *"Learn the Latest Tech Skills; Advance Your Career | Udacity"*. Browser IAM granted via
+  `infra/agent_permissions.py`.
+  - _Test: T6 — DONE._
 
 ---
 

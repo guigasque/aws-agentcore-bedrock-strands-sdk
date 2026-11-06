@@ -15,7 +15,7 @@ how to run it is [`../starter/README.md`](../starter/README.md); the operational
 | Deployable cloud agent | `BedrockAgentCoreApp` + `@app.entrypoint`, Nova 2 Lite | ✅ Wave 1 |
 | Product/policy answers (RAG) | `search_knowledge_base` → Bedrock KB (S3 Vectors) | ✅ Wave 2 |
 | Exact loyalty discounts | `calculate_loyalty_discount` → Code Interpreter | ✅ Wave 3 |
-| Live web browsing | AgentCore Browser tool | 🔜 Wave 4 |
+| Live web browsing | AgentCore Browser tool | ✅ Wave 4 |
 | Order tracking & refunds | AgentCore Gateway (MCP) → Lambda/API Gateway | 🔜 Wave 5 |
 | Cross-session memory | `MemoryHook` → AgentCore Memory | 🔜 Wave 6 |
 
@@ -116,13 +116,25 @@ runtime role. The provided `setup_permissions.py` does not grant this (and is ga
 discount ($11), **final $99.00**, $51 saved, 99 earned, 349 remaining — from the live sandbox, not
 the fallback.
 
-### 3.3 Live web browsing — Browser tool 🔜 (Wave 4)
+### 3.3 Live web browsing — Browser tool ✅ (Wave 4)
 
-**What (planned):** open a live URL and report real-time information (e.g., a page title).
+**What:** open a live URL and report real-time information (e.g., a page title).
 
-**How (planned):** an AgentCore Browser tool is added to the agent. Note: the starter's
-`AgentCoreBrowser` was removed in `strands-agents-tools` 0.9.0, so we pin `<0.9.0` and load the
-tool lazily; Wave 4 decides whether to stay pinned or migrate to `BrowserClient` + Playwright.
+**How:** `_browser_tools()` lazily imports `strands_tools.browser.AgentCoreBrowser`, instantiates it
+with `region` + `session_timeout` from config, and adds its `.browser` tool to the agent. The tool
+is session-based (the model runs `init_session` → `navigate` → `get_text`/title) and drives a
+headless browser in an AgentCore browser session. If the import is unavailable it logs and returns
+`[]` (graceful — the agent still runs without browsing).
+
+**Version caveat:** `strands_tools.browser` was removed in `strands-agents-tools` 0.9.0, so
+`pyproject.toml` pins `<0.9.0`. The import is lazy so a future drift can't crash module import.
+
+**Permissions note:** needs `bedrock-agentcore:*BrowserSession*` / stream actions on the runtime
+role, granted by `infra/agent_permissions.py` (setup_permissions.py grants these too but is gated on
+Memory).
+
+**Verified (cloud, T6):** "Go to https://www.udacity.com and tell me the page title" →
+*"Learn the Latest Tech Skills; Advance Your Career | Udacity"* (live fetch).
 
 ### 3.4 Orders & refunds — AgentCore Gateway (MCP) 🔜 (Wave 5)
 
