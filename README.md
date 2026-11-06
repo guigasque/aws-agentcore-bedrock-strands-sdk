@@ -6,6 +6,7 @@
 
 > **Implementation note (this fork):** the sections below are the original course brief and are
 > kept as the reference. For how this repository is actually built, set up, and deployed, see:
+> - **How it all works (start here):** [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md)
 > - **Developer guide:** [`starter/README.md`](starter/README.md)
 > - **Architecture & diagrams:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 > - **Operational build log:** [`DEPLOYMENT.md`](DEPLOYMENT.md)

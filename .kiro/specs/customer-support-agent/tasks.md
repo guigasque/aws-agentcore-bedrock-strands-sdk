@@ -22,30 +22,36 @@ matching resource is provisioned (Wave I). Code waves and provisioning interleav
 
 Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 
+**Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
+
+**Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ (deployed, cloud-verified) ·
+Wave 2 ✅ (T3 passing) · Wave I: KB layer ✅ (I.1, I.2 KB-role, I.5–I.7, I.10, provision_kb) ·
+Next: Wave 3 (loyalty calculator).
+
 ---
 
 ## Wave 0 — Spec, env, tooling scaffold, docs (no `main.py` logic change)
 _Commit: `chore: spec, config scaffold, ruff, docs, gitignore`_
 
-- [ ] 0.1 Spec committed under `.kiro/specs/customer-support-agent/` (this plan + requirements + design).
-- [ ] 0.2 `.gitignore` excludes `.env`, `.venv/`, `build/`, `*.egg-info/`.
-- [ ] 0.3 `DEPLOYMENT.md` (root) — operational/build log: env facts, pinned SDK versions, SDK-surface
+- [x] 0.1 Spec committed under `.kiro/specs/customer-support-agent/` (this plan + requirements + design).
+- [x] 0.2 `.gitignore` excludes `.env`, `.venv/`, `build/`, `*.egg-info/`.
+- [x] 0.3 `DEPLOYMENT.md` (root) — operational/build log: env facts, pinned SDK versions, SDK-surface
   verification, config architecture; infra/deploy/test/teardown sections stubbed for later waves.
-- [ ] 0.4 `starter/config.yaml` — self-documenting source of truth (model_id, region, gateway_url,
+- [x] 0.4 `starter/config.yaml` — self-documenting source of truth (model_id, region, gateway_url,
   kb/memory ids, retrieval, loyalty rates, browser, timeouts, system_prompt_path).
-- [ ] 0.5 `starter/system_prompt.txt` — externalized system prompt.
-- [ ] 0.6 `starter/ruff.toml` — lint + format config; install `ruff` into the venv (dev tool).
-- [ ] 0.7 `starter/sync_config.py` — idempotent: rewrites only the `REGION`/`KB_ID`/`MEMORY_ID`
+- [x] 0.5 `starter/system_prompt.txt` — externalized system prompt.
+- [x] 0.6 `starter/ruff.toml` — lint + format config; install `ruff` into the venv (dev tool).
+- [x] 0.7 `starter/sync_config.py` — idempotent: rewrites only the `REGION`/`KB_ID`/`MEMORY_ID`
   literals in `main.py` from `config.yaml`. Re-run is a no-op.
-- [ ] 0.8 `starter/README.md` — rewrite the stub into the developer guide (venv, config model, ruff,
+- [x] 0.8 `starter/README.md` — rewrite the stub into the developer guide (venv, config model, ruff,
   wave structure, deploy, spec pointer).
-- [ ] 0.9 Root `README.md` — add a short pointer banner at the top to `starter/README.md` and
+- [x] 0.9 Root `README.md` — add a short pointer banner at the top to `starter/README.md` and
   `DEPLOYMENT.md`; leave the rest of the brief untouched.
-- [ ] 0.10 `docs/ARCHITECTURE.md` — six Mermaid diagrams + prose: (a) system architecture,
-  (b) single-invoke request flow, (c) tool-routing decision flow, (d) cross-session memory sequence
-  (T4), (e) deployment/provisioning order (scriptable vs console), (f) configuration flow. Cross-link
-  from both READMEs.
-  - _Requirements: 12.3, 12.5, 13.1-13.5, 14.1-14.5; documentation_
+- [x] 0.10 `docs/ARCHITECTURE.md` — Mermaid diagrams + prose: (a) system architecture,
+  (b) single-invoke request flow, (c) tool-routing decision flow, (c2) KB data source & ingestion,
+  (d) cross-session memory sequence (T4), (e) deployment/provisioning order, (f) configuration flow.
+  Plus `docs/HOW_IT_WORKS.md` (narrative overview). Cross-linked from both READMEs.
+  - _Requirements: 12.3, 12.5, 13.1-13.5, 14.1-14.6; documentation_
 
 ---
 
@@ -53,24 +59,24 @@ _Commit: `chore: spec, config scaffold, ruff, docs, gitignore`_
 _Commit: `feat(todo1,3,8): runnable Nova Lite agent skeleton + config loader`_
 _Fills: TODO 1, TODO 3, minimal TODO 8, `load_config()`. TODO 2 = literals mirrored from config._
 
-- [ ] 1.1 `load_config()` — read `config.yaml` over built-in defaults; safe fallback on missing/invalid.
+- [x] 1.1 `load_config()` — read `config.yaml` over minimal defaults; safe fallback on missing/invalid.
   - _Requirements: 13.2_
-- [ ] 1.2 TODO 1 — `app = BedrockAgentCoreApp()`; keep `BYPASS_TOOL_CONSENT="true"`; `__main__` → `app.run()`.
+- [x] 1.2 TODO 1 — `app = BedrockAgentCoreApp()`; keep `BYPASS_TOOL_CONSENT="true"`; `__main__` → `app.run()`.
   - _Requirements: 1.1, 1.2, 1.3 — Rubric 1_
-- [ ] 1.3 TODO 2 — `REGION`/`KB_ID`/`MEMORY_ID` as literals (synced from config via `sync_config.py`);
+- [x] 1.3 TODO 2 — `REGION`/`KB_ID`/`MEMORY_ID` as literals (synced from config via `sync_config.py`);
   `GATEWAY_URL = _CFG.get("gateway_url", ...)`. Shape-valid placeholders until Wave 7/I.
   - _Requirements: 2.1, 2.2, 2.3, 13.3_
-- [ ] 1.4 TODO 3 — `model = BedrockModel(model_id=_CFG["model_id"])`;
-  `memory_client = MemoryClient(region_name=REGION)`;
-  `_bedrock_runtime = boto3.client("bedrock-agent-runtime", region_name=REGION)`.
-  - _Requirements: 3.1, 3.2, 3.3, 13.1_
-- [ ] 1.5 TODO 8 (minimal) — `@app.entrypoint async def invoke(...)`: validate `prompt`; extract
-  `customer_id`/`session_id` (uuid fallback); log identifiers; build `Agent(model, tools=[],
-  system_prompt=<loaded>)`; invoke; return first content-block text; specific-exception try/except.
+- [x] 1.4 TODO 3 — lazy `get_model()` / `get_memory_client()` / `get_bedrock_runtime()` (cached);
+  `model_id` from config. (Refactored to lazy init after the Wave 1 cold-start incident.)
+  - _Requirements: 3.1, 3.2, 3.3, 13.1, 12.8_
+- [x] 1.5 TODO 8 (minimal) — `@app.entrypoint async def invoke(...)`: validate `prompt`; extract
+  `customer_id`/`session_id` (uuid fallback); log identifiers; build `Agent(get_model(), tools=[],
+  system_prompt=<loaded>)`; invoke; `_response_text()`; specific-exception try/except.
   - _Requirements: 8.1, 8.2, 8.5, 8.6, 12.1, 12.4 — Rubric 1_
-- [ ] 1.6 Gate + verify: `ruff check`, `py_compile`; local smoke via `main()` toggle; deploy +
-  `agentcore invoke '{"prompt":"hello"}'`.
-  - _Deployable + runnable checkpoint._
+- [x] 1.6 Gate + verify: ruff + py_compile clean; local smoke OK; **deployed to cloud** (ARN
+  `cs_support_agent-yMZc9TGr2D`) and `agentcore invoke` returned a coherent response. Fixed cold-start
+  import crash via lazy imports + `strands-agents-tools<0.9.0` pin + `.dockerignore`.
+  - _Deployable + runnable checkpoint met._
 
 ---
 
@@ -78,16 +84,16 @@ _Fills: TODO 1, TODO 3, minimal TODO 8, `load_config()`. TODO 2 = literals mirro
 _Commit: `feat(todo6): knowledge base search tool (RAG)`_
 _Fills: TODO 6; adds the tool to the entrypoint tools list._
 
-- [ ] 2.1 TODO 6 — `@tool search_knowledge_base(query)`: guard unconfigured `KB_ID` →
-  `"Knowledge base not configured."`; call `_bedrock_runtime.retrieve(knowledgeBaseId=KB_ID,
-  retrievalQuery={"text": query})`; empty → no-results msg; else join chunk texts with `"\n---\n"`;
-  try/except → readable error; docstring states when to use it.
+- [x] 2.1 TODO 6 — `@tool search_knowledge_base(query)`: `_is_configured(KB_ID)` guard →
+  `"Knowledge base not configured."`; `get_bedrock_runtime().retrieve(...)` with config-driven
+  `top_k` (via `retrievalConfiguration`); empty → no-results msg; else join with configured
+  separator; specific-exception → readable error; INFO log; docstring states when to use it.
   - _Requirements: 6.1–6.5 — Rubric 3_
-- [ ] 2.2 Add `search_knowledge_base` to the entrypoint tools list.
+- [x] 2.2 Add `search_knowledge_base` to the entrypoint tools list.
   - _Requirements: 8.4_
-- [ ] 2.3 Verify: compile; deploy; (once KB exists) T3 — "Platinum loyalty tier benefits" →
-  same-day shipping, 15%, priority support.
-  - _Test: T3 (needs KB_ID)._
+- [x] 2.3 Verify: ruff + compile clean; KB provisioned (Wave I.5–7); **T3 PASSED** — "Platinum
+  loyalty tier benefits" → free same-day shipping, 15% discount, priority support (grounded).
+  - _Test: T3 — DONE._
 
 ---
 
@@ -191,23 +197,24 @@ _Commit(s): `feat(infra): idempotent boto3 provisioner + destroyer`_
 _All-code, no console. Can land its code before the agent waves need the IDs; sub-layers may be
 committed incrementally. Each module is idempotent (describe-or-create) and has a matching destroy._
 
-- [ ] I.1 `infra/common.py` — boto3 session from `.env`, tagging, logging, describe-or-create and
-  waiter helpers; `infra/state.json` read/write for created IDs/ARNs.
+- [x] I.1 `infra/common.py` — boto3 session from `.env`, tagging, logging, describe-or-create and
+  waiter helpers; `infra/state.json` read/write for created IDs/ARNs. **DONE (Wave 2).**
   - _Requirements: 15.1, 15.3, 12.3_
-- [ ] I.2 `infra/iam.py` — Lambda execution role + KB service role (least privilege); idempotent.
+- [~] I.2 `infra/iam.py` — KB service role (least privilege) **DONE (Wave 2)**; Lambda execution role
+  pending (Wave 5).
   - _Requirements: 15.1, 12.7_
 - [ ] I.3 `infra/lambdas.py` — zip + create/update `order-tracker`, `refund-processor` (Py 3.12).
   - _Requirements: 15.1_
 - [ ] I.4 `infra/apigw.py` — REST API + 3 resources + GET Lambda-proxy methods
   (`get_order`/`get_customer_orders`/`get_customer`) + deploy stage `prod`.
   - _Requirements: 15.1_
-- [ ] I.5 `infra/s3_catalog.py` — bucket + upload `product_catalog.txt`.
+- [x] I.5 `infra/s3_catalog.py` — bucket + upload `product_catalog.txt`. **DONE (Wave 2).**
   - _Requirements: 15.1_
-- [ ] I.6 `infra/opensearch.py` — Serverless collection + encryption/network/data-access policies +
-  vector index; waiter for ACTIVE.
+- [x] I.6 `infra/s3vectors.py` — **S3 Vectors** bucket + index (1024-dim cosine, Titan v2), replacing
+  OpenSearch Serverless (simpler + cheaper). **DONE (Wave 2).**
   - _Requirements: 15.1, 15.3_
-- [ ] I.7 `infra/knowledge_base.py` — managed KB (OSS backing) + data source + `StartIngestionJob` +
-  wait COMPLETE → `KB_ID`.
+- [x] I.7 `infra/knowledge_base.py` — managed KB (S3_VECTORS) + data source + `StartIngestionJob` +
+  wait COMPLETE → `KB_ID`. **DONE (Wave 2): KB_ID=YPXPQVRBJX.**
   - _Requirements: 15.1, 15.3_
 - [ ] I.8 `infra/gateway.py` — Gateway (NONE auth) + target `order_tracker` (API GW, 3 ops) +
   `refund_processor` (Lambda, schema `lambda/lambda_schema`) → `GATEWAY_URL`.
@@ -215,11 +222,11 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [ ] I.9 `infra/memory.py` — Memory + strategies `customer_facts`→`cs_agent/{actorId}/facts`,
   `customer_preferences`→`cs_agent/{actorId}/preferences`; wait ACTIVE → `MEMORY_ID`.
   - _Requirements: 15.1, 15.3_
-- [ ] I.10 `infra/outputs.py` — write `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` into `config.yaml`; run
-  `sync_config.py` to mirror the three literals into `main.py`.
+- [x] I.10 `infra/outputs.py` — write `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` into `config.yaml`; run
+  `sync_config.py` to mirror the three literals into `main.py`. **DONE (Wave 2): KB_ID synced.**
   - _Requirements: 15.5, 13.3_
-- [ ] I.11 `infra/provision.py` (`python -m infra.provision`) — run layers 1-8 in order; then
-  outputs. Idempotent end-to-end.
+- [~] I.11 `infra/provision.py` (`python -m infra.provision`) — run all layers in order; then
+  outputs. Idempotent. **KB-only subset `infra/provision_kb.py` DONE (Wave 2);** full provision pending.
   - _Requirements: 15.3, 15.4_
 - [ ] I.12 `infra/destroy.py` (`python -m infra.destroy`) — delete in reverse order, idempotent and
   safe on partial/already-deleted state.
@@ -235,9 +242,6 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 ## Wave 8 — Deploy, test capture, reflection
 _Commit: `test: six scenario outputs + reflection`_
 
-- [ ] 8.1 Deploy: `agentcore configure ... --deployment-type direct_code_deploy --runtime
-  PYTHON_3_13 --disable-memory`; `agentcore deploy`; `python setup_permissions.py`.
-  - _Requirements: 9.1, 9.2 — Rubric 1_
 - [ ] 8.1 Provision + deploy (all code): `python -m infra.provision`; `agentcore configure ...
   --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory`; `agentcore deploy`;
   `python setup_permissions.py`; `python -m infra.verify`.

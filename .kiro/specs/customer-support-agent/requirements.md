@@ -388,6 +388,12 @@ up, run, deploy, and understand the project without reading all the code.
    (`config.yaml` → `load_config()`/`sync_config.py` → `main.py` literals → `setup_permissions.py`).
    Diagrams SHALL be Mermaid code blocks (text, GitHub-renderable, no binary assets) and SHALL be
    kept consistent with the implementation.
+6. The repository SHALL include **`docs/HOW_IT_WORKS.md`** — a single narrative "how everything
+   works" overview: the mental model, one request traced end to end, each capability explained, and
+   how configuration and infrastructure tie together. It SHALL mark each capability's status
+   (implemented vs. planned-for-wave-N), stay in lock-step with the build, and cross-link to
+   `ARCHITECTURE.md` (visuals), `design.md` (why/build), `starter/README.md` (run), and
+   `DEPLOYMENT.md` (operational log) so each doc keeps a single, non-overlapping purpose.
 
 ### Requirement 15 — Infrastructure as code (no console; fully reversible)
 

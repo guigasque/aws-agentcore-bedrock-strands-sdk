@@ -104,13 +104,42 @@ comments, and is idempotent (second run is a no-op).
 
 ## 4. Infrastructure provisioning (all code — `starter/infra/`)
 
-_To be filled in Wave I. Resources (deterministic names, idempotent): IAM roles, `order-tracker`
-and `refund-processor` Lambdas, REST API + stage `prod`, S3 bucket + `product_catalog.txt`,
-OpenSearch Serverless collection + policies + index, managed Knowledge Base + data source +
-ingestion, AgentCore Gateway + 2 targets, AgentCore Memory + 2 strategies._
+### Knowledge Base layer (provisioned; enables Wave 2 RAG)
 
-Entry points: `python -m infra.provision` / `python -m infra.destroy` / `python -m infra.verify`.
-Resulting resource IDs recorded here (no secrets).
+Design choice: **S3 Vectors** (`storageConfiguration.type=S3_VECTORS`) as the KB vector store
+instead of OpenSearch Serverless. Rationale: dramatically simpler to provision as code (vector
+bucket + index vs. collection + 3 policy types + data-plane index) and far cheaper (no always-on
+OpenSearch OCUs — the exact cost risk the course Cleanup section warns about). Embedding model:
+`amazon.titan-embed-text-v2:0` (1024-dim, cosine).
+
+`infra/` modules (idempotent describe-or-create, each with a matching delete):
+`common.py` (session/naming/tags/state/waiters), `iam.py` (KB service role, least privilege),
+`s3_catalog.py` (source bucket + `product_catalog.txt`), `s3vectors.py` (vector bucket + index),
+`knowledge_base.py` (KB + data source + ingestion with COMPLETE waiter), `outputs.py` (writes IDs
+to `config.yaml` + runs `sync_config.py`), `provision_kb.py` (KB-only entry point).
+
+Run: `python -m infra.provision_kb`. Resulting resources (account 024333017526, us-east-1):
+
+| Resource | Name / ID |
+|---|---|
+| Source bucket | `cs-support-kb-src-024333017526-us-east-1` |
+| Vector bucket | `cs-support-vectors-024333017526-us-east-1` |
+| Vector index | `cs-support-index` (1024-dim, cosine) |
+| KB service role | `arn:aws:iam::024333017526:role/cs-support-kb-service-role` |
+| Knowledge Base | `CustomerSupportKB` → **KB_ID `YPXPQVRBJX`** |
+| Data source | `cs-support-catalog` (`KMTALPXTF7`) |
+| Ingestion job | `PW4TSROBWM` → COMPLETE |
+
+Incident handled: newly-created IAM role needs ~10-60s to be assumable by Bedrock
+(`CreateKnowledgeBase` → "unable to assume the given role"). `provision_kb.py` wraps KB creation in
+a `wait_until` that retries on any "assume"/"accessdenied" message (idempotent; the role/bucket are
+reused on retry).
+
+Verification (code-only): `search_knowledge_base("return policy for electronics")` returned the
+"Electronics: 15 days" chunk; full agent **T3** ("Platinum loyalty tier benefits") returned free
+same-day shipping + 15% discount + priority support, grounded in the catalog. RAG works end to end.
+
+_Remaining infra layers (Lambdas, API Gateway, Gateway, Memory) are added in Wave I._
 
 ---
 

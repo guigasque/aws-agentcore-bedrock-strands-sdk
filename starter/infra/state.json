@@ -1,0 +1,12 @@
+{
+  "catalog_key": "product_catalog.txt",
+  "data_source_id": "KMTALPXTF7",
+  "kb_id": "YPXPQVRBJX",
+  "kb_role_arn": "arn:aws:iam::024333017526:role/cs-support-kb-service-role",
+  "kb_role_name": "cs-support-kb-service-role",
+  "source_bucket": "cs-support-kb-src-024333017526-us-east-1",
+  "source_bucket_arn": "arn:aws:s3:::cs-support-kb-src-024333017526-us-east-1",
+  "vector_bucket": "cs-support-vectors-024333017526-us-east-1",
+  "vector_index": "cs-support-index",
+  "vector_index_arn": "arn:aws:s3vectors:us-east-1:024333017526:bucket/cs-support-vectors-024333017526-us-east-1/index/cs-support-index"
+}

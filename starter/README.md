@@ -2,7 +2,8 @@
 
 Implementation of a customer support agent on **Amazon Bedrock AgentCore** with the **Strands SDK**.
 This guide covers local setup, the configuration model, linting, the wave-based build, and the
-all-code deploy/destroy workflow. The course brief is the root `README.md`; the operational build
+all-code deploy/destroy workflow. **New here? Start with [`../docs/HOW_IT_WORKS.md`](../docs/HOW_IT_WORKS.md)**
+for the end-to-end narrative. The course brief is the root `README.md`; the operational build
 log is `../DEPLOYMENT.md`; architecture diagrams are `../docs/ARCHITECTURE.md`; the full spec
 (requirements, design, tasks) is `../.kiro/specs/customer-support-agent/`.
 
@@ -74,10 +75,29 @@ All AWS resources are provisioned and destroyed by code. The agent Runtime uses 
 toolkit (also CLI, not UI).
 
 ```bash
-python -m infra.provision   # IAM, Lambdas, REST API, S3+KB+OpenSearch, Gateway, Memory (idempotent)
+python -m infra.provision   # IAM, Lambdas, REST API, S3+KB (S3 Vectors), Gateway, Memory (idempotent)
 python -m infra.verify      # identity, MCP tool listing, KB retrieve probe, Memory ACTIVE
 python -m infra.destroy     # reverse teardown (idempotent)
 ```
+
+To provision only the Knowledge Base layer (useful while iterating on RAG):
+
+```bash
+python -m infra.provision_kb
+```
+
+### How the knowledge base works
+
+The KB answers **only** from `product_catalog.txt`. Provisioning uploads that file to an S3 source
+bucket, then an ingestion job **chunks** it, **embeds** each chunk with Amazon Titan Text Embeddings
+v2 (`amazon.titan-embed-text-v2:0`), and stores the vectors in an **S3 Vectors** index (chosen over
+OpenSearch Serverless: simpler to script and no always-on cost). At query time, `search_knowledge_base`
+calls the Bedrock Retrieve API, which semantically matches the question and returns the relevant
+chunks for the model to answer from.
+
+The KB is a **snapshot** taken at ingestion time — it does not read the file live. After editing
+`product_catalog.txt`, re-run `python -m infra.provision_kb` to re-upload and re-ingest. The provisioner
+writes the resulting `KB_ID` into `config.yaml` and syncs it into `main.py` automatically.
 
 ## 5. Deploy & run
 
@@ -115,7 +135,7 @@ starter/
 ├── setup_permissions.py # provided; grants runtime-role access (do not modify)
 ├── ruff.toml            # lint/format config
 ├── pyproject.toml       # dependencies
-├── product_catalog.txt  # KB data source (uploaded by infra/)
+├── product_catalog.txt  # KB knowledge source — uploaded, chunked & embedded into the KB
 ├── lambda/              # order_tracker.py, refund_processor.py, lambda_schema (deployed as-is)
 └── infra/               # idempotent boto3 provisioner/destroyer (all-code IaC)
 ```

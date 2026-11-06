@@ -30,8 +30,8 @@ flowchart LR
 
     agent -. hooks .-> mem["AgentCore Memory<br/>facts + preferences"]
 
-    kb --> kbapi["Bedrock KB Retrieve API"] --> oss[("OpenSearch Serverless")]
-    s3[("S3: product_catalog.txt")] -. ingested .-> oss
+    kb --> kbapi["Bedrock KB Retrieve API"] --> ossv[("S3 Vectors index<br/>cs-support-index")]
+    s3[("S3 source bucket<br/>product_catalog.txt")] -. "ingested: chunk + embed (Titan v2)" .-> ossv
     calc --> ci["Code Interpreter sandbox"]
     gw --> gwsvc["AgentCore Gateway<br/>(NONE auth, MCP)"]
     gwsvc --> apigw["API Gateway REST (prod)"] --> lo["Lambda: order-tracker"]
@@ -101,6 +101,29 @@ flowchart TD
 
 ---
 
+## (c2) Knowledge Base: where answers come from
+
+The knowledge base answers **only** from `starter/product_catalog.txt`. That file is uploaded to an
+S3 source bucket, then an ingestion job chunks it, embeds each chunk with Amazon Titan Text
+Embeddings v2, and stores the vectors in an S3 Vectors index. At query time the Retrieve API
+semantically matches the question against those vectors and returns the original text chunks for
+the model to answer from. The KB holds a **snapshot** taken at ingestion — editing the catalog
+requires re-running `python -m infra.provision_kb` to re-upload and re-ingest.
+
+```mermaid
+flowchart LR
+    doc["product_catalog.txt<br/>(single source of truth)"] -->|"infra/s3_catalog.py upload"| src[("S3 source bucket")]
+    src -->|"data source + StartIngestionJob"| ing["Ingestion:<br/>chunk → embed (Titan v2)"]
+    ing -->|"store vectors"| idx[("S3 Vectors index<br/>cs-support-index")]
+    subgraph query["At query time (RAG)"]
+        qp["Customer question"] --> emb["embed question"]
+        emb --> idx
+        idx -->|"top-k similar chunks"| mdl["Model answers from chunks"]
+    end
+```
+
+---
+
 ## (d) Cross-session memory sequence (Test 4)
 
 Two separate sessions, same `customer_id`. Session A writes an interaction; AgentCore extracts
@@ -139,9 +162,9 @@ flowchart TD
     subgraph prov["python -m infra.provision (idempotent)"]
         i1["1. IAM roles"] --> i2["2. Lambdas<br/>order-tracker, refund-processor"]
         i2 --> i3["3. REST API + stage prod"]
-        i3 --> i4["4. S3 + product_catalog.txt"]
-        i4 --> i5["5. OpenSearch Serverless<br/>collection + policies + index"]
-        i5 --> i6["6. Knowledge Base + data source + ingestion → KB_ID"]
+        i3 --> i4["4. S3 source bucket + product_catalog.txt"]
+        i4 --> i5["5. S3 Vectors bucket + index<br/>(1024-dim cosine)"]
+        i5 --> i6["6. Knowledge Base (S3_VECTORS) + data source +<br/>ingestion (chunk+embed Titan v2) → KB_ID"]
         i6 --> i7["7. Gateway (NONE) + 2 targets → GATEWAY_URL"]
         i7 --> i8["8. Memory + 2 strategies → MEMORY_ID"]
         i8 --> i9["outputs.py → config.yaml → sync_config.py → main.py literals"]

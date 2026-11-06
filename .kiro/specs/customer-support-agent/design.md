@@ -154,6 +154,10 @@ system_prompt_path: "system_prompt.txt"
   teardown. Updated at **every wave hand-off** with what was actually built and verified.
 - `.kiro/specs/` holds the why/what (requirements, design, tasks). `DEPLOYMENT.md` and
   `starter/README.md` hold the how/operational. No secrets in any doc.
+- **`docs/HOW_IT_WORKS.md`** — the single narrative "how everything works" overview (mental model,
+  one request end to end, each capability, config + infra), with per-capability status markers
+  (implemented vs. planned-for-wave). It is the "start here to understand the system" entry point
+  and cross-links the other docs so each keeps one non-overlapping purpose.
 - **`docs/ARCHITECTURE.md`** — human-facing rendered diagrams (Mermaid) + prose, the richer
   companion to the ASCII diagram in this design. Contents: (a) system architecture, (b) single
   `invoke` request flow, (c) tool-routing decision flow, (d) cross-session memory sequence (T4),
@@ -468,6 +472,13 @@ The agent **Runtime** is provisioned via the sanctioned toolkit (`agentcore conf
 
 ### IaC approach — Option A: idempotent boto3 orchestrator (`infra/`)
 
+> **Design update (Wave 2):** the KB vector store is **S3 Vectors**
+> (`storageConfiguration.type=S3_VECTORS`), not OpenSearch Serverless. Discovered during
+> implementation that boto3 1.43.123 + Bedrock support S3 Vectors as a managed KB backing store.
+> It is far simpler to provision as code (vector bucket + index) and avoids always-on OpenSearch
+> Serverless OCU cost (the exact risk the course Cleanup warns about). The OpenSearch path below is
+> retained only as the fallback if S3 Vectors is unavailable in a region/account.
+
 A small Python package `starter/infra/` using the venv boto3 and the `.env` credentials. Design
 principles: **idempotent** (describe-or-create by deterministic name; update-in-place; re-run is a
 no-op), **ordered** (respects dependencies), **reversible** (symmetric destroy), and **stateful
@@ -497,9 +508,8 @@ starter/infra/
 | 2 | `order-tracker`, `refund-processor` Lambdas (Py 3.12) | `lambda` | function ARNs | function name |
 | 3 | REST API + `/orders/{order_id}`, `/customers/{customer_id}/orders`, `/customers/{customer_id}` GET proxy (ops `get_order`/`get_customer_orders`/`get_customer`), stage `prod` | `apigateway` | REST API id, stage | API name (tag) |
 | 4 | S3 bucket + `product_catalog.txt` | `s3` | bucket/key | bucket name |
-| 5 | OpenSearch Serverless collection + policies + index | `opensearchserverless` | collection ARN/endpoint | collection name |
-| 6 | Managed KB + data source + ingestion | `bedrock-agent` | **`KB_ID`** | KB name |
-| 7 | Gateway (NONE auth) + 2 targets | `bedrock-agentcore-control` | **`GATEWAY_URL`** | gateway name |
+| 5 | S3 Vectors bucket + index (KB vector store; replaces OpenSearch Serverless) | `s3vectors` | index ARN | bucket/index name |
+| 6 | Managed KB (S3_VECTORS) + data source + ingestion | `bedrock-agent` | **`KB_ID`** | KB name || 7 | Gateway (NONE auth) + 2 targets | `bedrock-agentcore-control` | **`GATEWAY_URL`** | gateway name |
 | 8 | Memory + 2 strategies | `bedrock-agentcore-control` | **`MEMORY_ID`** | memory name |
 
 After layers 6–8, `outputs.py` writes `GATEWAY_URL`, `KB_ID`, `MEMORY_ID` into `config.yaml` and

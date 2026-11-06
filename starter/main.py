@@ -122,7 +122,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 # config.yaml like every other value.
 
 REGION    = "us-east-1"  # mirror of config.yaml:region (via sync_config.py)
-KB_ID     = "<kbid>"  # mirror of config.yaml:knowledge_base_id (via sync_config.py)
+KB_ID     = "YPXPQVRBJX"  # mirror of config.yaml:knowledge_base_id (via sync_config.py)
 MEMORY_ID = "<mem_id>"  # mirror of config.yaml:memory_id (via sync_config.py)
 
 GATEWAY_URL = _CFG.get("gateway_url", "<gateway_url>")
