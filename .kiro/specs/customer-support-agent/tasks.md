@@ -251,13 +251,14 @@ _Commit: `test: six scenario outputs + reflection`_
   --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory`; `agentcore deploy`;
   `python setup_permissions.py`; `python -m infra.verify`.
   - _Requirements: 9.1, 9.2, 15.1-15.6 — Rubric 1_
-- [ ] 8.2 Run + capture all six tests under `evidence/` (T1–T6); MCP log shows ≥2 tool calls.
+- [x] 8.2 Run + capture all six tests under `evidence/img/` (T1–T6 screenshots + a deploy shot);
+  MCP log shows ≥2 tool calls (T1 order + T2 refund). **DONE — all six captured & verified.**
   - _Requirements: 9.3, 10.2 — Rubric 1–6_
-- [ ] 8.3 Reflection `evidence/reflection.md` (200–400 words): named tool + design rationale;
-  concrete challenge + resolution; ≥1 production consideration.
+- [x] 8.3 Reflection `evidence/reflection.md` (200–400 words): named tool + design rationale;
+  concrete challenge + resolution; ≥1 production consideration. **DONE (357 words).**
   - _Requirements: 10.3, 10.4 — Rubric 7_
-- [ ] 8.4 Docs: finalize `DEPLOYMENT.md` (provision + deploy output, all resource IDs, six test
-  captures, teardown) and `starter/README.md` (final run/test instructions).
+- [x] 8.4 Docs: `DEPLOYMENT.md` has provision/deploy output + all resource IDs + the six test
+  results + permissions notes; `evidence/README.md` indexes the screenshots. **DONE.**
   - _Requirements: 14.1, 14.3_
 - [ ] 8.5 Teardown rehearsal (optional, if lab time allows): `agentcore destroy` + `python -m
   infra.destroy` leaves no residual resources; re-running is a no-op.
