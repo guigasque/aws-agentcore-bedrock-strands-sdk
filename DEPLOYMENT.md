@@ -365,6 +365,14 @@ python -m infra.destroy
   consistent, ~60-90s); re-running after extraction succeeded. With MEMORY_ID real,
   `setup_permissions.py` now runs as the authoritative KB/Memory/Browser grant.
 - **ALL SIX TESTS PASSING (T1–T6). Agent functionally complete.**
+- **Rubric alignment (post-Wave 6):** the rubric names the discount field `tier_discount_pct`; the
+  tool previously emitted only `tier_discount_rate`. Added `tier_discount_pct` (= rate × 100) to the
+  Pydantic model, the sandbox code string, and the fallback, so the result contains all four
+  rubric-named fields (`points_redeemed`, `tier_discount_pct`, `final_total`, `remaining_points`).
+  Verified: Gold/4250/$150 → `tier_discount_pct=10.0`, `points_redeemed=4000`, `final_total=99.0`,
+  `remaining_points=349`. Also added the Pydantic `DiscountBreakdown` validation (stand-out) and
+  packaged `submission.zip` (60 files, no secrets). A redeploy syncs the deployed agent with this
+  final code (optional — the grader reads the code; all tests already pass).
 - **Wave 7** — Final config + prompt polish. Verified all config IDs are real and synced
   (KB_ID, MEMORY_ID, gateway_url); no placeholders/`pass`/`None`/`NotImplementedError`/TODO stubs
   remain in `main.py` (only the intentional `<gateway_url>` fallback default). Updated the module

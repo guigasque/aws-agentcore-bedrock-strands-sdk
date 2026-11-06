@@ -408,6 +408,7 @@ class DiscountBreakdown(BaseModel):
     order_total: float
     tier: str
     tier_discount_rate: float
+    tier_discount_pct: float
     points_redeemed: int
     tier_discount: float
     final_total: float
@@ -515,6 +516,7 @@ def calculate_loyalty_discount(
             "order_total": round(order_total, 2),
             "tier": tier,
             "tier_discount_rate": tier_rate,
+            "tier_discount_pct": round(tier_rate * 100, 2),
             "points_redeemed": points_redeemed,
             "points_value_applied": round(point_value, 2),
             "tier_discount": tier_discount,
@@ -557,6 +559,7 @@ def calculate_loyalty_discount(
             "order_total": round(float(order_total), 2),
             "tier": tier,
             "tier_discount_rate": tier_rate,
+            "tier_discount_pct": round(tier_rate * 100, 2),
             "points_redeemed": 0,
             "tier_discount": tier_discount,
             "final_total": final_total,
