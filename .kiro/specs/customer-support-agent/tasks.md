@@ -205,8 +205,8 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [x] I.1 `infra/common.py` — boto3 session from `.env`, tagging, logging, describe-or-create and
   waiter helpers; `infra/state.json` read/write for created IDs/ARNs. **DONE (Wave 2).**
   - _Requirements: 15.1, 15.3, 12.3_
-- [~] I.2 `infra/iam.py` — KB service role, **Lambda exec role, Gateway role DONE (Wave 5)**;
-  least privilege; idempotent.
+- [x] I.2 `infra/iam.py` — KB service role, Lambda exec role, Gateway role (least privilege);
+  idempotent. **DONE.**
   - _Requirements: 15.1, 12.7_
 - [x] I.3 `infra/lambdas.py` — zip + create/update `order-tracker`, `refund-processor` (Py 3.12). **DONE (Wave 5).**
   - _Requirements: 15.1_
@@ -230,16 +230,17 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [x] I.10 `infra/outputs.py` — write `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` into `config.yaml`; run
   `sync_config.py` to mirror the three literals into `main.py`. **DONE (Wave 2): KB_ID synced.**
   - _Requirements: 15.5, 13.3_
-- [~] I.11 `infra/provision.py` (`python -m infra.provision`) — run all layers in order; then
-  outputs. Idempotent. **KB-only subset `infra/provision_kb.py` DONE (Wave 2);** full provision pending.
+- [x] I.11 `infra/provision.py` (`python -m infra.provision`) — run all layers in dependency order,
+  then outputs. **DONE — idempotent end-to-end (re-run verified a no-op across all layers).**
   - _Requirements: 15.3, 15.4_
-- [ ] I.12 `infra/destroy.py` (`python -m infra.destroy`) — delete in reverse order, idempotent and
-  safe on partial/already-deleted state.
+- [x] I.12 `infra/destroy.py` (`python -m infra.destroy`) — delete in reverse order, best-effort and
+  idempotent (safe on partial/already-deleted state); also removes the runtime-role add-on policy.
+  **DONE (built + lint/compile clean; not run against the live stack to preserve it).**
   - _Requirements: 15.4, 15.7_
-- [ ] I.13 `infra/verify.py` — code-only checks: identity, programmatic MCP tool listing, KB
-  `retrieve` probe ("return policy for electronics" → 15-day), Memory `get_memory` ACTIVE.
+- [x] I.13 `infra/verify.py` — code-only checks: identity, programmatic MCP tool listing (6 tools),
+  KB `retrieve` probe (15-day), Memory ACTIVE + 2 strategies. **DONE — 4/4 passed.**
   - _Requirements: 15.6_
-- [ ] I.14 Record all commands + resulting IDs in `DEPLOYMENT.md` (no secrets).
+- [x] I.14 Record all commands + resulting IDs in `DEPLOYMENT.md` (no secrets). **DONE.**
   - _Requirements: 14.1, 14.3_
 
 ---

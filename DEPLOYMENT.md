@@ -104,6 +104,18 @@ comments, and is idempotent (second run is a no-op).
 
 ## 4. Infrastructure provisioning (all code — `starter/infra/`)
 
+**Unified lifecycle (all code, verified):**
+- `python -m infra.provision` — creates all layers (KB, Gateway, Memory) in dependency order;
+  idempotent (a re-run was confirmed a no-op across every layer), then writes config + syncs main.py.
+- `python -m infra.verify` — code-only checks; last run **4/4 passed** (identity; 6 MCP tools;
+  KB returns the 15-day result; Memory ACTIVE with SEMANTIC + USER_PREFERENCE strategies).
+- `python -m infra.destroy` — reverse-order best-effort teardown of everything provision created,
+  plus the runtime-role add-on policy (built + lint/compile clean; not run so the graded stack stays
+  up). The agent Runtime is removed separately with `agentcore destroy`.
+
+Per-layer entry points also exist (`infra.provision_kb` / `infra.provision_gateway` /
+`infra.provision_memory`), used to build and test incrementally. Details of each layer follow.
+
 ### Knowledge Base layer (provisioned; enables Wave 2 RAG)
 
 Design choice: **S3 Vectors** (`storageConfiguration.type=S3_VECTORS`) as the KB vector store
