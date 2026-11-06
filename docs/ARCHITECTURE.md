@@ -53,28 +53,29 @@ prompt, runs the model/tools, then persists the turn.
 sequenceDiagram
     autonumber
     participant C as Client
-    participant E as invoke() entrypoint
+    participant E as invoke entrypoint
     participant H as MemoryHook
     participant M as AgentCore Memory
     participant G as MCP Gateway
-    participant A as Agent (Nova Lite)
+    participant A as Agent Nova Lite
     participant T as Selected tool
 
-    C->>E: {prompt, customer_id, session_id?}
-    E->>E: validate prompt; session_id = uuid if absent; log identifiers
-    E->>H: MemoryHook(actor, session)
-    E->>G: open MCPClient context, list_tools_sync()
-    E->>A: Agent(model, [kb, calc, browser, *gateway_tools], hooks=[H], system_prompt)
-    A->>H: MessageAddedEvent (user message)
-    H->>M: retrieve_memories(facts, preferences, top_k)
+    C->>E: payload prompt, customer_id, session_id
+    E->>E: validate prompt, default session_id, log identifiers
+    E->>H: build MemoryHook for actor and session
+    E->>G: open MCP client, list tools
+    E->>A: build Agent with tools, hooks, system prompt
+    A->>H: MessageAddedEvent for the user message
+    H->>M: retrieve_memories from facts and preferences
     M-->>H: relevant memories
-    H-->>A: prepend "Customer Context: ..." to the user message
-    A->>T: tool call (if the model decides to)
+    H-->>A: prepend Customer Context to the user message
+    A->>T: tool call if the model decides to
     T-->>A: tool result
     A-->>E: assistant response
     A->>H: AfterInvocationEvent
-    H->>M: create_event([(query, USER), (response, ASSISTANT)])
+    H->>M: create_event with user and assistant messages
     E-->>C: first content-block text
+
 ```
 
 ---
@@ -115,7 +116,7 @@ flowchart LR
     doc["product_catalog.txt<br/>(single source of truth)"] -->|"infra/s3_catalog.py upload"| src[("S3 source bucket")]
     src -->|"data source + StartIngestionJob"| ing["Ingestion:<br/>chunk → embed (Titan v2)"]
     ing -->|"store vectors"| idx[("S3 Vectors index<br/>cs-support-index")]
-    subgraph query["At query time (RAG)"]
+    subgraph query["At query time - RAG"]
         qp["Customer question"] --> emb["embed question"]
         emb --> idx
         idx -->|"top-k similar chunks"| mdl["Model answers from chunks"]
@@ -133,21 +134,21 @@ facts/preferences asynchronously; Session B retrieves them.
 sequenceDiagram
     autonumber
     participant A as Session s-A
-    participant Ag as Agent + MemoryHook
+    participant Ag as Agent plus MemoryHook
     participant M as AgentCore Memory
     participant X as Async extraction
     participant B as Session s-B
 
-    A->>Ag: "Hi, I am Jane. I prefer concise responses." (CUST-123)
-    Ag->>M: create_event([(user, Jane/concise), (assistant, ...)])
+    A->>Ag: Hi, I am Jane. I prefer concise responses. actor CUST-123
+    Ag->>M: create_event with the user and assistant messages
     M->>X: extract into namespaces
-    X-->>M: cs_agent/CUST-123/facts = {name: Jane}
-    X-->>M: cs_agent/CUST-123/preferences = {concise}
-    Note over X,M: ~30s extraction latency
-    B->>Ag: "Do you remember my name and preference?" (CUST-123)
-    Ag->>M: retrieve_memories(facts, preferences)
-    M-->>Ag: Jane + concise
-    Ag-->>B: "Yes, Jane — I'll keep it concise."
+    X-->>M: facts namespace gets name is Jane
+    X-->>M: preferences namespace gets prefers concise
+    Note over X,M: about 30s extraction latency
+    B->>Ag: Do you remember my name and preference? actor CUST-123
+    Ag->>M: retrieve_memories from facts and preferences
+    M-->>Ag: Jane plus concise
+    Ag-->>B: Yes, Jane. I will keep it concise.
 ```
 
 ---
@@ -159,7 +160,7 @@ teardown is the reverse via `agentcore destroy` + `infra.destroy`.
 
 ```mermaid
 flowchart TD
-    subgraph prov["python -m infra.provision (idempotent)"]
+    subgraph prov["python -m infra.provision - idempotent"]
         i1["1. IAM roles"] --> i2["2. Lambdas<br/>order-tracker, refund-processor"]
         i2 --> i3["3. REST API + stage prod"]
         i3 --> i4["4. S3 source bucket + product_catalog.txt"]
@@ -186,12 +187,12 @@ literals because `setup_permissions.py` AST-reads them.
 
 ```mermaid
 flowchart LR
-    yaml["config.yaml<br/>(single source of truth)"]
-    yaml -->|load_config()| mainpy["main.py runtime values<br/>model_id, rates, prompt path,<br/>GATEWAY_URL, retrieval, timeouts"]
-    yaml -->|sync_config.py| lits["main.py literals<br/>REGION, KB_ID, MEMORY_ID"]
-    lits -->|AST literal read| perms["setup_permissions.py<br/>→ runtime-role IAM policy"]
-    infra["infra/outputs.py"] -->|writes IDs| yaml
-    txt["system_prompt.txt"] -->|system_prompt_path| mainpy
+    yaml["config.yaml - source of truth"]
+    yaml -->|"load_config"| mainpy["main.py runtime values:<br/>model_id, rates, prompt path,<br/>GATEWAY_URL, retrieval, timeouts"]
+    yaml -->|"sync_config.py"| lits["main.py literals:<br/>REGION, KB_ID, MEMORY_ID"]
+    lits -->|"AST literal read"| perms["setup_permissions.py<br/>runtime-role IAM policy"]
+    infra["infra/outputs.py"] -->|"writes IDs"| yaml
+    txt["system_prompt.txt"] -->|"system_prompt_path"| mainpy
 ```
 
 The idempotent `sync_config.py` only rewrites the three literal lines; `infra.outputs` closes the
