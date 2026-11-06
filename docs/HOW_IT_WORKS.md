@@ -16,7 +16,7 @@ how to run it is [`../starter/README.md`](../starter/README.md); the operational
 | Product/policy answers (RAG) | `search_knowledge_base` → Bedrock KB (S3 Vectors) | ✅ Wave 2 |
 | Exact loyalty discounts | `calculate_loyalty_discount` → Code Interpreter | ✅ Wave 3 |
 | Live web browsing | AgentCore Browser tool | ✅ Wave 4 |
-| Order tracking & refunds | AgentCore Gateway (MCP) → Lambda/API Gateway | 🔜 Wave 5 |
+| Order tracking & refunds | AgentCore Gateway (MCP) → Lambda/API Gateway | ✅ Wave 5 |
 | Cross-session memory | `MemoryHook` → AgentCore Memory | 🔜 Wave 6 |
 
 ---
@@ -136,14 +136,26 @@ Memory).
 **Verified (cloud, T6):** "Go to https://www.udacity.com and tell me the page title" →
 *"Learn the Latest Tech Skills; Advance Your Career | Udacity"* (live fetch).
 
-### 3.4 Orders & refunds — AgentCore Gateway (MCP) 🔜 (Wave 5)
+### 3.4 Orders & refunds — AgentCore Gateway (MCP) ✅ (Wave 5)
 
-**What (planned):** track orders, look up customers, initiate refunds, generate return labels.
+**What:** track orders, look up customers, initiate refunds, generate return labels.
 
-**How (planned):** two Lambda functions (`order-tracker` via API Gateway, `refund-processor` as a
-direct Lambda target) are exposed through the AgentCore **Gateway** as MCP tools. `invoke()` opens
-an `MCPClient` to the gateway's `/mcp` endpoint, loads the tools, and adds them to the agent — so
-the model can call them like any local tool. The gateway uses the NONE authorizer (sandbox only).
+**How:** two Lambda functions — `order-tracker` (fronted by an API Gateway REST stage) and
+`refund-processor` (a direct Lambda target) — are exposed through the AgentCore **Gateway** as MCP
+tools. `invoke()` opens an `MCPClient` to the gateway's `/mcp` endpoint (lazy import, graceful
+fallback to local tools if unreachable), loads the tools inside the client context, and creates +
+runs the `Agent` there (gateway tools are only valid while the context is open). Tool names are
+prefixed by target, e.g. `order-tracker___get_order`, `refund-processor___initiate_refund`. The
+gateway uses the NONE authorizer (sandbox only) so the unsigned MCP client connects directly.
+
+**Infra (all code):** `infra/lambdas.py` (deploy both Lambdas), `infra/apigw.py` (REST API + 3 GET
+proxy routes + method responses, stage `prod`), `infra/gateway.py` (Gateway + 2 targets, with
+`toolFilters` for the API routes and the `lambda_schema` inline payload for refunds). Entry point:
+`python -m infra.provision_gateway`.
+
+**Verified (cloud):** 6 MCP tools exposed (3 order + 3 refund). **T1** — "track order ORD-001" →
+SHIPPED, TRK987654321, UPS, ETA. **T2** — "refund my Kindle (ORD-002)" → refund ID, APPROVED,
+"3-5 business days". (Rubric 2: ≥2 well-formed MCP tool invocations.)
 
 ### 3.5 Cross-session memory — MemoryHook 🔜 (Wave 6)
 

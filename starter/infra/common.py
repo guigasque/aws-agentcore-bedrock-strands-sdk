@@ -26,6 +26,7 @@ REGION = "us-east-1"
 NAMES: dict[str, str] = {
     "lambda_role": "cs-support-lambda-exec-role",
     "kb_role": "cs-support-kb-service-role",
+    "gateway_role": "cs-support-gateway-role",
     "order_lambda": "order-tracker",
     "refund_lambda": "refund-processor",
     "rest_api": "cs-support-api",

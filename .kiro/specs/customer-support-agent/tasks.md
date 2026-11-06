@@ -25,8 +25,8 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 **Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
 
 **Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ · Wave 2 ✅ (T3) · Wave 3 ✅ (T5) ·
-Wave 4 ✅ (T6) — all cloud-verified · Wave I: KB layer ✅ + `agent_permissions`
-(Code Interpreter + Browser + KB Retrieve) ✅ · Next: Wave 5 (MCP gateway — orders & refunds).
+Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) — all cloud-verified · Wave I: KB + Gateway layers ✅ +
+`agent_permissions` (Code Interpreter + Browser + KB Retrieve) ✅ · Next: Wave 6 (cross-session memory).
 
 ---
 
@@ -144,12 +144,13 @@ _Fills: browser portion of TODO 8._
 _Commit: `feat(todo8): connect MCP gateway tools`_
 _Fills: MCP portion of TODO 8._
 
-- [ ] 5.1 Open `MCPClient(lambda: streamable_http_client(GATEWAY_URL))`; inside the context,
+- [x] 5.1 Open `MCPClient(lambda: streamable_http_client(GATEWAY_URL))`; inside the context,
   `tools.extend(mcp_client.list_tools_sync())`; create + run the `Agent` inside the context.
+  Lazy `_gateway_client()` with graceful fallback. **DONE.**
   - _Requirements: 8.4, 8.5 — Rubric 2_
-- [ ] 5.2 Verify compile + deploy; (once Gateway exists) T1 — track ORD-001 → SHIPPED,
-  TRK987654321, UPS, ETA; T2 — refund ORD-002 Kindle → refund ID, APPROVED, "3-5 business days".
-  - _Test: T1 + T2 (≥2 MCP tool invocations, well-formed) (needs GATEWAY_URL)._
+- [x] 5.2 ruff + compile; **deployed + T1/T2 PASSED in cloud** — T1 ORD-001 → SHIPPED,
+  TRK987654321, UPS, ETA; T2 ORD-002 → refund ID, APPROVED, "3-5 business days". 6 MCP tools exposed.
+  - _Test: T1 + T2 — DONE._
 
 ---
 
@@ -203,13 +204,13 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [x] I.1 `infra/common.py` — boto3 session from `.env`, tagging, logging, describe-or-create and
   waiter helpers; `infra/state.json` read/write for created IDs/ARNs. **DONE (Wave 2).**
   - _Requirements: 15.1, 15.3, 12.3_
-- [~] I.2 `infra/iam.py` — KB service role (least privilege) **DONE (Wave 2)**; Lambda execution role
-  pending (Wave 5).
+- [~] I.2 `infra/iam.py` — KB service role, **Lambda exec role, Gateway role DONE (Wave 5)**;
+  least privilege; idempotent.
   - _Requirements: 15.1, 12.7_
-- [ ] I.3 `infra/lambdas.py` — zip + create/update `order-tracker`, `refund-processor` (Py 3.12).
+- [x] I.3 `infra/lambdas.py` — zip + create/update `order-tracker`, `refund-processor` (Py 3.12). **DONE (Wave 5).**
   - _Requirements: 15.1_
-- [ ] I.4 `infra/apigw.py` — REST API + 3 resources + GET Lambda-proxy methods
-  (`get_order`/`get_customer_orders`/`get_customer`) + deploy stage `prod`.
+- [x] I.4 `infra/apigw.py` — REST API + 3 resources + GET Lambda-proxy methods
+  (`get_order`/`get_customer_orders`/`get_customer`) + 200 method responses + deploy stage `prod`. **DONE (Wave 5).**
   - _Requirements: 15.1_
 - [x] I.5 `infra/s3_catalog.py` — bucket + upload `product_catalog.txt`. **DONE (Wave 2).**
   - _Requirements: 15.1_
@@ -219,8 +220,8 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [x] I.7 `infra/knowledge_base.py` — managed KB (S3_VECTORS) + data source + `StartIngestionJob` +
   wait COMPLETE → `KB_ID`. **DONE (Wave 2): KB_ID=YPXPQVRBJX.**
   - _Requirements: 15.1, 15.3_
-- [ ] I.8 `infra/gateway.py` — Gateway (NONE auth) + target `order_tracker` (API GW, 3 ops) +
-  `refund_processor` (Lambda, schema `lambda/lambda_schema`) → `GATEWAY_URL`.
+- [x] I.8 `infra/gateway.py` — Gateway (NONE auth) + target `order-tracker` (API GW, 3 ops) +
+  `refund-processor` (Lambda, schema `lambda/lambda_schema`) → `GATEWAY_URL`. **DONE (Wave 5).**
   - _Requirements: 15.1, 15.7_
 - [ ] I.9 `infra/memory.py` — Memory + strategies `customer_facts`→`cs_agent/{actorId}/facts`,
   `customer_preferences`→`cs_agent/{actorId}/preferences`; wait ACTIVE → `MEMORY_ID`.

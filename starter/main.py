@@ -506,12 +506,41 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         tools: list = [search_knowledge_base, calculate_loyalty_discount]
         tools += _browser_tools()  # AgentCore browser (lazy; [] if unavailable)
 
-        agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
-        result = agent(user_input)
+        # Gateway MCP tools (orders & refunds) are only valid inside the MCP client
+        # context, so the Agent is created and run there. If the gateway is not
+        # configured/reachable, fall back to running with the local tools only.
+        mcp_client = _gateway_client()
+        if mcp_client is None:
+            agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
+            result = agent(user_input)
+            return _response_text(result)
+
+        with mcp_client:
+            try:
+                tools.extend(mcp_client.list_tools_sync())
+            except Exception as error:  # gateway hiccup — continue with local tools
+                logger.warning("Could not load gateway tools (%s); using local tools only.", error)
+            agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
+            result = agent(user_input)
         return _response_text(result)
     except Exception as error:  # noqa: BLE001 - entrypoint must never crash the runtime
         logger.exception("invoke failed")
         return f"Error handling request: {error}"
+
+
+def _gateway_client():
+    """Build an MCPClient for the AgentCore Gateway, or None if not configured."""
+    if not _is_configured(GATEWAY_URL):
+        logger.info("Gateway not configured; skipping MCP tools.")
+        return None
+    try:
+        from mcp.client.streamable_http import streamable_http_client
+        from strands.tools.mcp.mcp_client import MCPClient
+
+        return MCPClient(lambda: streamable_http_client(GATEWAY_URL))
+    except Exception as error:  # import/construction failure — degrade gracefully
+        logger.warning("Could not create MCP client (%s); skipping gateway tools.", error)
+        return None
 
 
 def _response_text(result: Any) -> str:

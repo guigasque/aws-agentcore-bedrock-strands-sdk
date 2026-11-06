@@ -139,7 +139,35 @@ Verification (code-only): `search_knowledge_base("return policy for electronics"
 "Electronics: 15 days" chunk; full agent **T3** ("Platinum loyalty tier benefits") returned free
 same-day shipping + 15% discount + priority support, grounded in the catalog. RAG works end to end.
 
-_Remaining infra layers (Lambdas, API Gateway, Gateway, Memory) are added in Wave I._
+_Remaining infra layers (Memory) are added in Wave 6._
+
+### Gateway layer (provisioned; enables Wave 5 orders/refunds)
+
+`infra/` modules: `lambdas.py` (deploy both provided Lambdas, Py 3.12), `apigw.py` (REST API +
+3 GET Lambda-proxy routes + 200 method responses, stage `prod`), `gateway.py` (AgentCore Gateway
+NONE-auth + 2 MCP targets), plus `iam.py` additions (lambda exec role, gateway role). Run:
+`python -m infra.provision_gateway`. Resources (account 024333017526, us-east-1):
+
+| Resource | Name / ID |
+|---|---|
+| Lambda exec role | `cs-support-lambda-exec-role` |
+| Gateway role | `cs-support-gateway-role` |
+| Lambdas | `order-tracker`, `refund-processor` (Python 3.12) |
+| REST API | `cs-support-api` (`m18h5qdmel`), stage `prod` |
+| Gateway | `CustomerSupportGateway` (`customersupportgateway-entnsccdms`) |
+| Targets | `order-tracker` (API GW, READY), `refund-processor` (Lambda, READY) |
+| **GATEWAY_URL** | `https://customersupportgateway-entnsccdms.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp` |
+
+Incidents handled during provisioning:
+1. IAM role **description** rejected an em-dash (`—`) → use ASCII hyphen.
+2. Gateway target **name** must match `([0-9a-zA-Z][-]?){1,100}` (no underscores) → renamed targets
+   to `order-tracker` / `refund-processor` (tool names become `target___tool`).
+3. API Gateway target requires `apiGatewayToolConfiguration.toolFilters` → added per-route filters.
+4. API Gateway target FAILED: "OpenAPI ... responses is missing" → added 200 **method responses**
+   to each GET (the Gateway introspects the API as OpenAPI and rejects operations without responses).
+   Added logic to delete+recreate a FAILED target (with an async-deletion waiter).
+
+Verification (code-only): the MCP client lists **6 tools** (3 order + 3 refund), both targets READY.
 
 ---
 
@@ -280,3 +308,13 @@ python -m infra.destroy
   PASSED** — "Go to https://www.udacity.com and tell me the page title" → *"Learn the Latest Tech
   Skills; Advance Your Career | Udacity"* (live fetch). Note: first attempt failed with a
   browser-session permission error until the Browser grant was re-run after deploy.
+- **Wave 5** — MCP Gateway tools (part of TODO 8). Added `_gateway_client()` + MCP wiring in the
+  entrypoint: opens `MCPClient(lambda: streamable_http_client(GATEWAY_URL))`, loads gateway tools
+  inside the context, creates+runs the Agent there; graceful fallback to local tools if the gateway
+  is unconfigured/unreachable. Built the gateway infra layer (`infra/lambdas.py`, `apigw.py`,
+  `gateway.py`, `provision_gateway.py` + iam roles). Verified: ruff clean; compile OK; MCP client
+  lists 6 tools. **Cloud T1 PASSED** (ORD-001 → SHIPPED, TRK987654321, UPS, ETA via
+  `order-tracker___get_order`) and **T2 PASSED** (ORD-002 → refund ID REF-…, APPROVED, "3-5 business
+  days" via `refund-processor___initiate_refund`). Rubric 2 satisfied (≥2 MCP tool invocations).
+  See §4 Gateway layer for provisioning incidents (role description em-dash, target name underscores,
+  required toolFilters, OpenAPI method responses).
