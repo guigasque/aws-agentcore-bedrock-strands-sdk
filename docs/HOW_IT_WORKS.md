@@ -222,14 +222,24 @@ actual resource IDs and the build log.
 
 ## 6. Lifecycle at a glance
 
+One-shot wrapper scripts (repo root) run the whole thing, with `--dry-run` to preview:
+
 ```bash
-# provision infra (as code) → deploy the agent → grant permissions → verify → test → tear down
+./deploy.sh --dry-run    # print the plan + read-only checks (no changes)
+./deploy.sh              # provision → configure → deploy → permissions → verify
+./teardown.sh            # agentcore destroy → infra.destroy (reverse order)
+```
+
+Equivalent explicit steps:
+
+```bash
 python -m infra.provision          # (today: infra.provision_kb for the KB layer)
 agentcore configure --entrypoint main.py --name cs_support_agent \
     --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory
 agentcore deploy
 python setup_permissions.py
-python -m infra.verify             # (planned)
+python -m infra.agent_permissions
+python -m infra.verify
 agentcore invoke '{"prompt": "...", "customer_id": "CUST-123", "session_id": "s1"}'
 agentcore destroy && python -m infra.destroy
 ```

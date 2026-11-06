@@ -20,6 +20,8 @@ zip -r "$OUT" \
   README.md \
   LICENSE.txt \
   package_submission.sh \
+  deploy.sh \
+  teardown.sh \
   -x '*/.venv/*' \
   -x '*/.ruff_cache/*' \
   -x '*/__pycache__/*' \

@@ -102,15 +102,30 @@ writes the resulting `KB_ID` into `config.yaml` and syncs it into `main.py` auto
 
 ## 5. Deploy & run
 
+**One-shot (recommended)** — wrapper scripts at the repo root run the whole lifecycle and support
+`--dry-run` (prints the plan + read-only checks, changes nothing):
+
+```bash
+./deploy.sh --dry-run     # preview: plan + sts identity + IAM policy preview + infra.verify
+./deploy.sh               # provision infra -> configure -> deploy -> permissions -> verify
+```
+
+**Or step by step:**
+
 ```bash
 agentcore configure --entrypoint main.py --name <your-agent-name> \
     --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory
 agentcore deploy                     # cloud deploy; no Docker (use --local for a container)
 python setup_permissions.py          # least-privilege policy on the runtime role
+python -m infra.agent_permissions    # Code Interpreter grant (setup_permissions omits it)
 agentcore invoke '{"prompt": "Hello", "customer_id": "CUST-123", "session_id": "s1"}'
 ```
 
-Full teardown: `agentcore destroy && python -m infra.destroy`.
+**Teardown** — `./teardown.sh` (or `./teardown.sh --dry-run` to list what would be deleted):
+
+```bash
+./teardown.sh             # agentcore destroy + python -m infra.destroy (reverse order)
+```
 
 ## 6. Functional tests
 
@@ -128,17 +143,21 @@ agentcore invoke '{"prompt": "Go to https://www.udacity.com and tell me the page
 ## 7. Project layout
 
 ```
-starter/
-├── main.py              # the agent (TODOs filled across waves)
-├── config.yaml          # single source of truth
-├── system_prompt.txt    # externalized system prompt
-├── sync_config.py       # mirror 3 literals into main.py (idempotent)
-├── setup_permissions.py # provided; grants runtime-role access (do not modify)
-├── ruff.toml            # lint/format config
-├── pyproject.toml       # dependencies
-├── product_catalog.txt  # KB knowledge source — uploaded, chunked & embedded into the KB
-├── lambda/              # order_tracker.py, refund_processor.py, lambda_schema (deployed as-is)
-└── infra/               # idempotent boto3 provisioner/destroyer (all-code IaC)
+.                        # repo root
+├── deploy.sh            # one-shot: provision → deploy → permissions → verify (--dry-run)
+├── teardown.sh          # one-shot: agentcore destroy → infra.destroy (--dry-run)
+├── package_submission.sh
+└── starter/
+    ├── main.py              # the agent (TODOs filled across waves)
+    ├── config.yaml          # single source of truth
+    ├── system_prompt.txt    # externalized system prompt
+    ├── sync_config.py       # mirror 3 literals into main.py (idempotent)
+    ├── setup_permissions.py # provided; grants runtime-role access (do not modify)
+    ├── ruff.toml            # lint/format config
+    ├── pyproject.toml       # dependencies
+    ├── product_catalog.txt  # KB knowledge source — uploaded, chunked & embedded into the KB
+    ├── lambda/              # order_tracker.py, refund_processor.py, lambda_schema (deployed as-is)
+    └── infra/               # idempotent boto3 provisioner/destroyer (all-code IaC)
 ```
 
 ## Build approach
