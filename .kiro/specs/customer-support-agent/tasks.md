@@ -25,8 +25,9 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 **Checkbox legend:** `[x]` done & verified · `[~]` partially done · `[ ]` not started.
 
 **Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ · Wave 2 ✅ (T3) · Wave 3 ✅ (T5) ·
-Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) — all cloud-verified · Wave I: KB + Gateway layers ✅ +
-`agent_permissions` (Code Interpreter + Browser + KB Retrieve) ✅ · Next: Wave 6 (cross-session memory).
+Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) · Wave 6 ✅ (T4) — **ALL SIX TESTS PASSING, cloud-verified** ·
+Wave I: KB + Gateway + Memory layers ✅ · Next: Wave 7 (final config/prompt polish), then Wave 8
+(evidence capture + reflection), Wave 9 (package).
 
 ---
 
@@ -158,25 +159,25 @@ _Fills: MCP portion of TODO 8._
 _Commit: `feat(todo4,5): cross-session memory hook`_
 _Fills: TODO 4 + TODO 5; wires `hooks=[memory_hook]` into the Agent._
 
-- [ ] 6.1 TODO 4 — `get_namespaces(mem_client, memory_id)`: `get_memory_strategies`;
+- [x] 6.1 TODO 4 — `get_namespaces(mem_client, memory_id)`: `get_memory_strategies`;
   `namespaceTemplates[0]` with `namespaces[0]` fallback; handle `type`/`memoryStrategyType`;
-  return `{strategy_type: template}`.
+  return `{strategy_type: template}`. **DONE.**
   - _Requirements: 4.1, 4.2, 4.3 — Rubric 4_
-- [ ] 6.2 TODO 5.1 — `MemoryHook.__init__` stores 4 attrs + `self.namespaces = get_namespaces(...)`.
+- [x] 6.2 TODO 5.1 — `MemoryHook.__init__` stores 4 attrs + `self.namespaces = get_namespaces(...)`. **DONE.**
   - _Requirements: 5.1_
-- [ ] 6.3 TODO 5 — text-extraction helper (plain-text user vs tool-result/tool-use).
+- [x] 6.3 TODO 5 — text-extraction helper (plain-text user vs tool-result/tool-use). **DONE (`_plain_text`).**
   - _Requirements: 5.2_
-- [ ] 6.4 TODO 5 — `retrieve_customer_context`: guard; per-namespace `retrieve_memories(...,top_k=5)`;
-  tag by strategy; prepend `"Customer Context:\n...\n\n"`; try/except logs + continues.
+- [x] 6.4 TODO 5 — `retrieve_customer_context`: guard; per-namespace `retrieve_memories(...,top_k=5)`;
+  tag by strategy; prepend `"Customer Context:\n...\n\n"`; try/except logs + continues. **DONE.**
   - _Requirements: 5.2, 5.3, 5.6_
-- [ ] 6.5 TODO 5 — `save_support_interaction`: walk backwards for last user + assistant;
-  `create_event(..., messages=[(q,"USER"),(a,"ASSISTANT")])`; try/except logs + continues.
+- [x] 6.5 TODO 5 — `save_support_interaction`: walk backwards for last user + assistant;
+  `create_event(..., messages=[(q,"USER"),(a,"ASSISTANT")])`; try/except logs + continues. **DONE.**
   - _Requirements: 5.4, 5.6_
-- [ ] 6.6 TODO 5 — `register_hooks`: `MessageAddedEvent`→retrieve, `AfterInvocationEvent`→save.
+- [x] 6.6 TODO 5 — `register_hooks`: `MessageAddedEvent`→retrieve, `AfterInvocationEvent`→save. **DONE.**
   - _Requirements: 5.5_
-- [ ] 6.7 Wire `hooks=[memory_hook]` into the Agent; verify compile + deploy; T4 — session s-A
-  ("Hi, I am Jane. I prefer concise responses."), wait ~30s, session s-B recall → "Jane" + concise.
-  - _Test: T4 (needs MEMORY_ID)._
+- [x] 6.7 Wire `hooks=[memory_hook]` into the Agent; ruff+compile; **deployed + T4 PASSED** —
+  s-A introduce → new session s-B2 recalled "Jane" + concise. `setup_permissions.py` now runs.
+  - _Test: T4 — DONE._
 
 ---
 
@@ -223,8 +224,8 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 - [x] I.8 `infra/gateway.py` — Gateway (NONE auth) + target `order-tracker` (API GW, 3 ops) +
   `refund-processor` (Lambda, schema `lambda/lambda_schema`) → `GATEWAY_URL`. **DONE (Wave 5).**
   - _Requirements: 15.1, 15.7_
-- [ ] I.9 `infra/memory.py` — Memory + strategies `customer_facts`→`cs_agent/{actorId}/facts`,
-  `customer_preferences`→`cs_agent/{actorId}/preferences`; wait ACTIVE → `MEMORY_ID`.
+- [x] I.9 `infra/memory.py` — Memory + strategies `customer_facts`→`cs_agent/{actorId}/facts`,
+  `customer_preferences`→`cs_agent/{actorId}/preferences`; wait ACTIVE → `MEMORY_ID`. **DONE (Wave 6).**
   - _Requirements: 15.1, 15.3_
 - [x] I.10 `infra/outputs.py` — write `GATEWAY_URL`/`KB_ID`/`MEMORY_ID` into `config.yaml`; run
   `sync_config.py` to mirror the three literals into `main.py`. **DONE (Wave 2): KB_ID synced.**

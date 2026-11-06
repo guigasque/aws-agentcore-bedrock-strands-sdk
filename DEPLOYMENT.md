@@ -169,6 +169,27 @@ Incidents handled during provisioning:
 
 Verification (code-only): the MCP client lists **6 tools** (3 order + 3 refund), both targets READY.
 
+### Memory layer (provisioned; enables Wave 6 cross-session memory)
+
+`infra/memory.py` creates the Memory resource + two strategies via the high-level
+`MemoryClient.create_or_get_memory` (idempotent, waits for ACTIVE). Run:
+`python -m infra.provision_memory`. Resources (account 024333017526, us-east-1):
+
+| Resource | Name / ID |
+|---|---|
+| Memory | `CustomerSupportMemory` → **MEMORY_ID `CustomerSupportMemory-V31S5N77HY`** |
+| Strategy (semantic) | `customer_facts` → `cs_agent/{actorId}/facts` |
+| Strategy (user pref) | `customer_preferences` → `cs_agent/{actorId}/preferences` |
+
+Memory took ~155s to reach ACTIVE. `MEMORY_ID` written to config.yaml and synced into main.py.
+With MEMORY_ID now real, the provided `setup_permissions.py` runs (inline policy
+`CustomerSupportIntegrations`: KB Retrieve + Memory + Browser). The Code Interpreter grant remains
+in `infra/agent_permissions.py` (`CustomerSupportAgentExtras`) since the provided script omits it.
+
+Verification: `get_namespaces` returns
+`{'SEMANTIC': 'cs_agent/{actorId}/facts', 'USER_PREFERENCE': 'cs_agent/{actorId}/preferences'}`;
+after session s-A, the strategies extracted "name is Jane" + "prefers concise responses".
+
 ---
 
 ## 5. Deploy, permissions, tests
@@ -318,3 +339,17 @@ python -m infra.destroy
   days" via `refund-processor___initiate_refund`). Rubric 2 satisfied (≥2 MCP tool invocations).
   See §4 Gateway layer for provisioning incidents (role description em-dash, target name underscores,
   required toolFilters, OpenAPI method responses).
+- **Wave 6** — Cross-session memory (TODO 4 + TODO 5). Implemented `get_namespaces()`
+  (`namespaceTemplates[0]` + `namespaces[0]` fallback; handles `type`/`memoryStrategyType`) and
+  `MemoryHook(HookProvider)`: `_plain_text` helper (skips tool-result/tool-use blocks),
+  `retrieve_customer_context` (per-namespace `retrieve_memories`, prepends "Customer Context:"),
+  `save_support_interaction` (walks messages backward, `create_event([(q,USER),(a,ASSISTANT)])`),
+  `register_hooks` (MessageAddedEvent + AfterInvocationEvent). All wrapped in try/except (graceful).
+  Wired `hooks=_memory_hooks(...)` into both Agent construction paths. Built `infra/memory.py` +
+  `provision_memory.py`. Verified: ruff clean; compile OK; `get_namespaces` returns the expected
+  mapping; extraction populated facts/preferences. **Cloud T4 PASSED** — session s-A ("Hi, I am Jane.
+  I prefer concise responses.") → new session s-B2 recalled *"Yes, Jane. I remember you prefer
+  concise responses."* Note: first s-B attempt ran before async extraction finished (eventually
+  consistent, ~60-90s); re-running after extraction succeeded. With MEMORY_ID real,
+  `setup_permissions.py` now runs as the authoritative KB/Memory/Browser grant.
+- **ALL SIX TESTS PASSING (T1–T6). Agent functionally complete.**

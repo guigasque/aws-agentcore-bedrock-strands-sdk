@@ -10,6 +10,7 @@
   "kb_role_name": "cs-support-kb-service-role",
   "lambda_role_arn": "arn:aws:iam::024333017526:role/cs-support-lambda-exec-role",
   "lambda_role_name": "cs-support-lambda-exec-role",
+  "memory_id": "CustomerSupportMemory-V31S5N77HY",
   "order_lambda_arn": "arn:aws:lambda:us-east-1:024333017526:function:order-tracker",
   "refund_lambda_arn": "arn:aws:lambda:us-east-1:024333017526:function:refund-processor",
   "rest_api_id": "m18h5qdmel",

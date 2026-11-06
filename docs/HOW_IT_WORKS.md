@@ -17,7 +17,9 @@ how to run it is [`../starter/README.md`](../starter/README.md); the operational
 | Exact loyalty discounts | `calculate_loyalty_discount` → Code Interpreter | ✅ Wave 3 |
 | Live web browsing | AgentCore Browser tool | ✅ Wave 4 |
 | Order tracking & refunds | AgentCore Gateway (MCP) → Lambda/API Gateway | ✅ Wave 5 |
-| Cross-session memory | `MemoryHook` → AgentCore Memory | 🔜 Wave 6 |
+| Cross-session memory | `MemoryHook` → AgentCore Memory | ✅ Wave 6 |
+
+All six capabilities are implemented and cloud-verified (tests T1–T6 all passing).
 
 ---
 
@@ -157,15 +159,30 @@ proxy routes + method responses, stage `prod`), `infra/gateway.py` (Gateway + 2 
 SHIPPED, TRK987654321, UPS, ETA. **T2** — "refund my Kindle (ORD-002)" → refund ID, APPROVED,
 "3-5 business days". (Rubric 2: ≥2 well-formed MCP tool invocations.)
 
-### 3.5 Cross-session memory — MemoryHook 🔜 (Wave 6)
+### 3.5 Cross-session memory — MemoryHook ✅ (Wave 6)
 
-**What (planned):** remember a customer's name and preferences across *separate* sessions.
+**What:** remember a customer's name and preferences across *separate* sessions.
 
-**How (planned):** a `MemoryHook` (a Strands `HookProvider`) registers two callbacks —
-`retrieve_customer_context` (before the model answers, pulls facts/preferences from AgentCore Memory
-and prepends them) and `save_support_interaction` (after answering, persists the turn). AgentCore
-Memory extracts facts/preferences asynchronously into per-customer namespaces, so a later session
-for the same `customer_id` recalls them (Test T4). See [`ARCHITECTURE.md` (d)](ARCHITECTURE.md).
+**How:** a `MemoryHook` (Strands `HookProvider`) registers two callbacks —
+`retrieve_customer_context` (on `MessageAddedEvent`: for a plain-text user message, queries each
+strategy namespace via `retrieve_memories` and prepends findings as a "Customer Context:" preamble)
+and `save_support_interaction` (on `AfterInvocationEvent`: walks messages backwards for the last
+user+assistant pair and persists them via `create_event`). `get_namespaces()` reads the strategy →
+namespace mapping (`namespaceTemplates[0]` with `namespaces[0]` fallback). AgentCore Memory extracts
+facts/preferences **asynchronously** into per-customer namespaces, so a later session for the same
+`customer_id` recalls them. All failures degrade gracefully (logged, turn continues).
+
+**Infra (all code):** `infra/memory.py` creates `CustomerSupportMemory` with two strategies
+(semantic → `cs_agent/{actorId}/facts`, user-preference → `cs_agent/{actorId}/preferences`) via
+`create_or_get_memory` + waiter. Entry point: `python -m infra.provision_memory`. Because MEMORY_ID
+now exists, the provided `setup_permissions.py` finally runs (KB + Memory + Browser); the Code
+Interpreter grant stays in `infra/agent_permissions.py`.
+
+**Verified (cloud, T4):** session s-A "Hi, I am Jane. I prefer concise responses." → async
+extraction populated facts ("name is Jane", "prefers concise") and preferences → new session s-B2
+"Do you remember my name and communication preference?" → *"Yes, Jane. I remember you prefer concise
+responses."* Note: extraction is eventually-consistent (can take 60-90s+); recall only works after it
+completes.
 
 ---
 

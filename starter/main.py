@@ -123,7 +123,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
 REGION    = "us-east-1"  # mirror of config.yaml:region (via sync_config.py)
 KB_ID     = "YPXPQVRBJX"  # mirror of config.yaml:knowledge_base_id (via sync_config.py)
-MEMORY_ID = "<mem_id>"  # mirror of config.yaml:memory_id (via sync_config.py)
+MEMORY_ID = "CustomerSupportMemory-V31S5N77HY"  # mirror of config.yaml:memory_id (via sync_config.py)
 
 GATEWAY_URL = _CFG.get("gateway_url", "<gateway_url>")
 
@@ -194,9 +194,19 @@ SYSTEM_PROMPT = _load_system_prompt()
 #     "USER_PREFERENCE": "cs_agent/{actorId}/preferences" }
 
 def get_namespaces(mem_client: MemoryClient, memory_id: str) -> dict:
-    """Return a dict mapping strategy type → namespace template string."""
-    # TODO: Implemented in Wave 6.
-    raise NotImplementedError("get_namespaces is implemented in Wave 6.")
+    """Return a dict mapping strategy type → namespace template string.
+
+    Reads each strategy's namespace from ``namespaceTemplates[0]`` (current API),
+    falling back to ``namespaces[0]`` for older responses. Handles both the
+    ``type`` and ``memoryStrategyType`` key variants.
+    """
+    namespaces: dict = {}
+    for strategy in mem_client.get_memory_strategies(memory_id):
+        strategy_type = strategy.get("type") or strategy.get("memoryStrategyType")
+        templates = strategy.get("namespaceTemplates") or strategy.get("namespaces") or []
+        if strategy_type and templates:
+            namespaces[strategy_type] = templates[0]
+    return namespaces
 
 
 # ── TODO 5 — Memory Hook ──────────────────────────────────────────────────────
@@ -235,37 +245,96 @@ class MemoryHook(HookProvider):
         memory_client: MemoryClient,
         memory_id: str,
     ):
-        # TODO: Store actor_id, session_id, memory_id, memory_client as attributes
-        # TODO: Call get_namespaces() and store the result as self.namespaces
-        pass
+        self.actor_id = actor_id
+        self.session_id = session_id
+        self.memory_client = memory_client
+        self.memory_id = memory_id
+        try:
+            self.namespaces = get_namespaces(memory_client, memory_id)
+        except Exception as error:  # memory not ready yet — degrade, don't crash
+            logger.warning("Could not load memory namespaces (%s); memory disabled this turn.", error)
+            self.namespaces = {}
+
+    @staticmethod
+    def _plain_text(message: dict) -> str | None:
+        """Return the text of a plain-text message, or None if it has tool blocks."""
+        content = message.get("content") or []
+        if any(isinstance(block, dict) and ("toolResult" in block or "toolUse" in block) for block in content):
+            return None
+        for block in content:
+            if isinstance(block, dict) and isinstance(block.get("text"), str):
+                return block["text"]
+        return None
 
     def retrieve_customer_context(self, event: MessageAddedEvent):
         """Retrieve relevant memories and prepend them to the user message."""
-        # TODO: Implement memory retrieval
-        # Steps:
-        #   1. Get the last message from event.agent.messages
-        #   2. Check it is a user message and not a tool result
-        #   3. Extract the user query text
-        #   4. For each namespace in self.namespaces, call retrieve_memories()
-        #   5. Collect non-empty memory texts with strategy type tags
-        #   6. If any found, prepend them to the user message
-        pass
+        try:
+            messages = event.agent.messages
+            if not messages:
+                return
+            last = messages[-1]
+            if last.get("role") != "user":
+                return
+            query = self._plain_text(last)
+            if not query:
+                return
+
+            top_k = _CFG.get("memory", {}).get("retrieve_top_k", 5)
+            collected: list[str] = []
+            for strategy_type, namespace in self.namespaces.items():
+                ns = namespace.format(actorId=self.actor_id)
+                try:
+                    memories = self.memory_client.retrieve_memories(
+                        memory_id=self.memory_id, namespace=ns, query=query, top_k=top_k
+                    )
+                except Exception as error:
+                    logger.warning("retrieve_memories failed for %s (%s).", strategy_type, error)
+                    continue
+                for record in memories or []:
+                    text = (record.get("content") or {}).get("text") if isinstance(record, dict) else None
+                    if text:
+                        collected.append(f"[{strategy_type}] {text}")
+
+            if collected:
+                context = "\n".join(collected)
+                for block in last.get("content", []):
+                    if isinstance(block, dict) and isinstance(block.get("text"), str):
+                        block["text"] = f"Customer Context:\n{context}\n\n{query}"
+                        break
+                logger.info("Injected %d memory item(s) for actor_id=%s", len(collected), self.actor_id)
+        except Exception:
+            logger.exception("retrieve_customer_context failed; continuing without memory.")
 
     def save_support_interaction(self, event: AfterInvocationEvent):
         """Save the completed turn to memory after the agent responds."""
-        # TODO: Implement memory saving
-        # Steps:
-        #   1. Get messages from event.agent.messages
-        #   2. Walk backwards to find the last user query (plain text)
-        #      and the last assistant response
-        #   3. Call memory_client.create_event() with both messages
-        pass
+        try:
+            messages = event.agent.messages
+            customer_query = None
+            agent_response = None
+            for message in reversed(messages):
+                role = message.get("role")
+                text = self._plain_text(message)
+                if role == "assistant" and agent_response is None and text:
+                    agent_response = text
+                elif role == "user" and customer_query is None and text:
+                    customer_query = text
+                if customer_query and agent_response:
+                    break
+            if customer_query and agent_response:
+                self.memory_client.create_event(
+                    memory_id=self.memory_id,
+                    actor_id=self.actor_id,
+                    session_id=self.session_id,
+                    messages=[(customer_query, "USER"), (agent_response, "ASSISTANT")],
+                )
+                logger.info("Saved interaction to memory for actor_id=%s", self.actor_id)
+        except Exception:
+            logger.exception("save_support_interaction failed; continuing.")
 
     def register_hooks(self, registry: HookRegistry) -> None:  # type: ignore
         """Register both memory callbacks."""
-        # TODO: Register retrieve_customer_context on MessageAddedEvent
-        # TODO: Register save_support_interaction on AfterInvocationEvent
-        pass
+        registry.add_callback(MessageAddedEvent, self.retrieve_customer_context)
+        registry.add_callback(AfterInvocationEvent, self.save_support_interaction)
 
 
 # ── TODO 6 — Knowledge Base Tool ─────────────────────────────────────────────
@@ -506,12 +575,14 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         tools: list = [search_knowledge_base, calculate_loyalty_discount]
         tools += _browser_tools()  # AgentCore browser (lazy; [] if unavailable)
 
+        hooks = _memory_hooks(actor_id, session_id)  # cross-session memory ([] if unconfigured)
+
         # Gateway MCP tools (orders & refunds) are only valid inside the MCP client
         # context, so the Agent is created and run there. If the gateway is not
         # configured/reachable, fall back to running with the local tools only.
         mcp_client = _gateway_client()
         if mcp_client is None:
-            agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
+            agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
             result = agent(user_input)
             return _response_text(result)
 
@@ -520,12 +591,24 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
                 tools.extend(mcp_client.list_tools_sync())
             except Exception as error:  # gateway hiccup — continue with local tools
                 logger.warning("Could not load gateway tools (%s); using local tools only.", error)
-            agent = Agent(model=get_model(), tools=tools, system_prompt=SYSTEM_PROMPT)
+            agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
             result = agent(user_input)
         return _response_text(result)
     except Exception as error:  # noqa: BLE001 - entrypoint must never crash the runtime
         logger.exception("invoke failed")
         return f"Error handling request: {error}"
+
+
+def _memory_hooks(actor_id: str, session_id: str) -> list:
+    """Return [MemoryHook] for cross-session memory, or [] if Memory is unconfigured."""
+    if not _is_configured(MEMORY_ID):
+        logger.info("Memory not configured; skipping memory hook.")
+        return []
+    try:
+        return [MemoryHook(actor_id, session_id, get_memory_client(), MEMORY_ID)]
+    except Exception as error:  # degrade gracefully — never block the turn
+        logger.warning("Could not build memory hook (%s); continuing without memory.", error)
+        return []
 
 
 def _gateway_client():
