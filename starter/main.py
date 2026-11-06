@@ -37,6 +37,7 @@ import boto3
 import yaml
 from bedrock_agentcore.memory import MemoryClient
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from pydantic import BaseModel, ValidationError
 from strands import Agent, tool
 from strands.hooks import (
     AfterInvocationEvent,
@@ -398,6 +399,38 @@ def search_knowledge_base(query: str) -> str:
     return separator.join(chunk for chunk in chunks if chunk)
 
 
+# ── Structured output validation (stand-out: Pydantic) ───────────────────────
+# Validate the discount breakdown before returning it, so a malformed Code
+# Interpreter result is caught rather than passed to the model as-is.
+class DiscountBreakdown(BaseModel):
+    """Validated shape of a loyalty discount result."""
+
+    order_total: float
+    tier: str
+    tier_discount_rate: float
+    points_redeemed: int
+    tier_discount: float
+    final_total: float
+    total_savings: float
+    points_earned: int
+    remaining_points: int
+    points_value_applied: float | None = None
+    note: str | None = None
+
+
+def _validated_breakdown(data: dict) -> str:
+    """Validate `data` against DiscountBreakdown and return clean JSON.
+
+    On validation failure, log and return the original data as JSON so the tool still
+    responds (validation is a safety net, not a hard gate that could break a turn).
+    """
+    try:
+        return DiscountBreakdown(**data).model_dump_json()
+    except ValidationError as error:
+        logger.warning("Discount breakdown failed validation (%s); returning raw result.", error)
+        return json.dumps(data)
+
+
 # ── TODO 7 — Loyalty Discount Tool (Code Interpreter) ────────────────────────
 # Implement calculate_loyalty_discount() using the @tool decorator.
 #
@@ -502,14 +535,25 @@ def calculate_loyalty_discount(
                 {"language": "python", "clearContext": True, "code": code},
             )
             for event in response["stream"]:
-                return json.dumps(event["result"])
+                result = event["result"]
+                # The breakdown is the stdout JSON printed by the sandbox code.
+                stdout = (result.get("structuredContent") or {}).get("stdout", "")
+                if not stdout:
+                    content = result.get("content") or [{}]
+                    stdout = content[0].get("text", "") if content else ""
+                try:
+                    breakdown = json.loads(stdout)
+                    return _validated_breakdown(breakdown)
+                except (json.JSONDecodeError, TypeError):
+                    # Could not parse the printed JSON — return the raw result event.
+                    return json.dumps(result)
         return json.dumps({"error": "Code Interpreter returned no result."})
     except Exception as error:  # fall back to a tier-only calculation; never raise
         logger.warning("Code Interpreter unavailable (%s); using tier-only fallback.", error)
         tier_rate = tier_rates.get(tier, 0.0)
         tier_discount = round(float(order_total) * tier_rate, 2)
         final_total = round(float(order_total) - tier_discount, 2)
-        return json.dumps({
+        return _validated_breakdown({
             "order_total": round(float(order_total), 2),
             "tier": tier,
             "tier_discount_rate": tier_rate,

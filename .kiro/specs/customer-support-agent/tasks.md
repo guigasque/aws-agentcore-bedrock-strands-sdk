@@ -26,7 +26,9 @@ Suggested commit messages are shown per wave; you adapt/commit as you prefer.
 
 **Progress (updated each wave):** Wave 0 ✅ · Wave 1 ✅ · Wave 2 ✅ (T3) · Wave 3 ✅ (T5) ·
 Wave 4 ✅ (T6) · Wave 5 ✅ (T1+T2) · Wave 6 ✅ (T4) — **ALL SIX TESTS PASSING, cloud-verified** · Wave 7 ✅ (config/prompt polish) ·
-Wave I: KB + Gateway + Memory layers ✅ · Next: Wave 8 (evidence capture + reflection), Wave 9 (package).
+Wave I: KB + Gateway + Memory layers ✅ + unified provision/destroy/verify ✅ ·
+Wave 8 ✅ (evidence + reflection) · Wave 9 ✅ (Pydantic validation + submission.zip) ·
+**PROJECT COMPLETE.**
 
 ---
 
@@ -248,9 +250,10 @@ committed incrementally. Each module is idempotent (describe-or-create) and has 
 ## Wave 8 — Deploy, test capture, reflection
 _Commit: `test: six scenario outputs + reflection`_
 
-- [ ] 8.1 Provision + deploy (all code): `python -m infra.provision`; `agentcore configure ...
-  --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory`; `agentcore deploy`;
-  `python setup_permissions.py`; `python -m infra.verify`.
+- [x] 8.1 Provision + deploy (all code): `python -m infra.provision` (idempotent, verified);
+  `agentcore configure ... --deployment-type direct_code_deploy --runtime PYTHON_3_13
+  --disable-memory`; `agentcore deploy`; `python setup_permissions.py` + `python -m
+  infra.agent_permissions`; `python -m infra.verify` (4/4). **DONE.**
   - _Requirements: 9.1, 9.2, 15.1-15.6 — Rubric 1_
 - [x] 8.2 Run + capture all six tests under `evidence/img/` (T1–T6 screenshots + a deploy shot);
   MCP log shows ≥2 tool calls (T1 order + T2 refund). **DONE — all six captured & verified.**
@@ -270,11 +273,14 @@ _Commit: `test: six scenario outputs + reflection`_
 ## Wave 9 — Optional polish + packaging
 _Commit(s): `feat: pydantic discount validation` (optional), `chore: package submission.zip`_
 
-- [ ] 9.1 (Optional) Pydantic `DiscountBreakdown` validation in TODO 7; omit if it risks any test.
+- [x] 9.1 Pydantic `DiscountBreakdown` validation in TODO 7 — validates the Code Interpreter output
+  (and the fallback) before returning; graceful (logs + returns raw on validation failure, never
+  breaks a turn). Added `pydantic>=2.0` to pyproject. **DONE — valid/invalid paths tested.**
   - _Requirements: 11.1, 11.3_
-- [ ] 9.2 Package `submission.zip`: completed `main.py`, `evidence/` (6 outputs + reflection),
-  unchanged support files, `DEPLOYMENT.md`, spec. Exclude `.env`, `.venv/`, `build/`, `*.egg-info/`.
-  Verify the archive listing.
+- [x] 9.2 Package `submission.zip` via `package_submission.sh`: completed `main.py`, `infra/`,
+  `evidence/` (7 screenshots + reflection), support files, `docs/`, spec, `DEPLOYMENT.md`, READMEs.
+  Excludes `.env`, `.venv/`, `build/`, `*.egg-info/`, caches, `.bedrock_agentcore/`. **DONE —
+  60 files, 798K; security-checked (no secrets leaked).**
   - _Requirements: 10.1, 10.2, 10.3_
 
 ---
