@@ -80,7 +80,7 @@ def ensure_api(order_lambda_arn: str) -> dict[str, str]:
         for part in parts:
             parent = _ensure_resource(client, api_id, parent, part, cache)
         resource_id = parent
-        # GET method (idempotent).
+        # GET method.
         try:
             client.put_method(
                 restApiId=api_id,
@@ -92,7 +92,7 @@ def ensure_api(order_lambda_arn: str) -> dict[str, str]:
         except ClientError as error:
             if error.response["Error"]["Code"] != "ConflictException":
                 raise
-        # Lambda-proxy integration (idempotent put).
+        # Lambda-proxy integration.
         client.put_integration(
             restApiId=api_id,
             resourceId=resource_id,
@@ -153,7 +153,7 @@ def _tags() -> dict:
 
 
 def delete_api() -> None:
-    """Delete the REST API (idempotent)."""
+    """Delete the REST API."""
     client = session().client("apigateway")
     api_id = _find_api(client)
     if not api_id:

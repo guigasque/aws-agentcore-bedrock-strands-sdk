@@ -524,7 +524,7 @@ cd starter && source .venv/bin/activate && set -a; source ../.env; set +a
 python -m infra.provision          # layers 1-8, idempotent; writes config.yaml + syncs main.py
 agentcore configure --entrypoint main.py --name <name> \
     --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory
-agentcore deploy                   # Runtime (code path; Docker UP)
+agentcore deploy                   # Runtime (direct_code_deploy; no Docker)
 python setup_permissions.py        # least-privilege policy on the runtime role
 # run the six tests ...
 agentcore destroy                  # tear down Runtime
@@ -565,7 +565,7 @@ set -a; source ../.env; set +a     # temporary lab AWS creds
 python -m infra.provision          # all infra as code; writes config.yaml + syncs main.py literals
 agentcore configure --entrypoint main.py --name <name> \
     --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory
-agentcore deploy                   # requires Docker running (confirmed UP)
+agentcore deploy                   # direct_code_deploy — no Docker (only --local uses it)
 python setup_permissions.py        # grant KB + memory + browser
 # wait briefly for IAM propagation, then run the six tests
 ```
@@ -587,7 +587,9 @@ tests pass. It is omitted if it risks any baseline criterion.
   `event["result"]` shape, and memory `get_memory_strategies`/`retrieve_memories`/`create_event`
   signatures were all verified against the installed versions (one live Code Interpreter call).
   Memory-record and retrieve-result dict shapes are still read defensively (`.get(...)`).
-- **Docker dependency** for `agentcore deploy`: confirmed Docker is UP on this machine.
+- **Docker**: NOT required for the cloud `agentcore deploy` (direct_code_deploy packages code +
+  deps and uploads to S3 — confirmed across every deploy). Optional, only for
+  `agentcore deploy --local` (local container dev).
 - **Memory extraction latency** (T4): the test instructions already require a ~30s wait; document it.
 - **NONE authorizer**: acceptable only for this sandbox; the design notes it must be deleted at
   cleanup and never used for sensitive data.

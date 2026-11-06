@@ -19,7 +19,7 @@ live in `docs/ARCHITECTURE.md`; the developer guide is `starter/README.md`.
 
 | Item | Result |
 |------|--------|
-| Docker | UP |
+| Docker | UP (but NOT needed — see note) |
 | Python | 3.13.4 |
 | `uv` | not installed — using `venv` + `pip` |
 | System AWS CLI | 2.27.33 — lacks `bedrock-agentcore-control` (too old for AgentCore control plane) |
@@ -27,6 +27,11 @@ live in `docs/ARCHITECTURE.md`; the developer guide is `starter/README.md`.
 | Terraform | v1.11.4 (installed; not used — see decision below) |
 | Node.js | v20.18.0 |
 | Nova 2 Lite access | enabled (`amazon.nova-2-lite-v1:0`) |
+
+**Docker note:** Docker is listed as running, but the project never uses it. `agentcore deploy`
+with `--deployment-type direct_code_deploy` packages the code + deps and uploads to S3 (every deploy
+log prints *"No Docker required"*). Docker is only relevant for `agentcore deploy --local` (local
+container dev), which we don't use. It is kept as an optional dev tool, not a prerequisite.
 
 **IaC decision:** provision **100% as code, no console**. Everything around the Runtime is created
 by an idempotent boto3 package (`starter/infra/`); the Runtime itself uses the sanctioned toolkit

@@ -60,7 +60,7 @@ def ensure_memory() -> str:
 
 
 def delete_memory() -> None:
-    """Delete the Memory resource (idempotent)."""
+    """Delete the Memory resource."""
     client = _client()
     memory_id = read_state().get("memory_id")
     if not memory_id:

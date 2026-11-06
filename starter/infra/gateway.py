@@ -140,7 +140,7 @@ def ensure_targets(gateway_id: str, rest_api_id: str, stage: str) -> None:
 
 
 def delete_gateway() -> None:
-    """Delete targets then the gateway (idempotent)."""
+    """Delete targets then the gateway."""
     client = session().client("bedrock-agentcore-control")
     gateway_id = read_state().get("gateway_id") or _find_gateway(client)
     if not gateway_id:

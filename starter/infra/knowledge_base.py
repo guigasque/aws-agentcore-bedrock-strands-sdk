@@ -25,7 +25,7 @@ def _find_kb_by_name(client, name: str) -> str | None:
 
 
 def ensure_knowledge_base(kb_role_arn: str, vector_index_arn: str) -> str:
-    """Create the KB (S3 Vectors) if absent; return its id (idempotent)."""
+    """Create the KB (S3 Vectors) if absent; return its id."""
     client = session().client("bedrock-agent")
     name = NAMES["knowledge_base"]
 
@@ -55,7 +55,7 @@ def ensure_knowledge_base(kb_role_arn: str, vector_index_arn: str) -> str:
 
 
 def ensure_data_source(kb_id: str, source_bucket_arn: str) -> str:
-    """Create the S3 data source if absent; return its id (idempotent)."""
+    """Create the S3 data source if absent; return its id."""
     client = session().client("bedrock-agent")
     name = NAMES["data_source"]
 
@@ -106,7 +106,7 @@ def provision_kb(kb_role_arn: str, vector_index_arn: str, source_bucket_arn: str
 
 
 def delete_knowledge_base() -> None:
-    """Delete the KB (and its data sources) by name (idempotent)."""
+    """Delete the KB (and its data sources) by name."""
     client = session().client("bedrock-agent")
     name = NAMES["knowledge_base"]
     kb_id = read_state().get("kb_id") or _find_kb_by_name(client, name)

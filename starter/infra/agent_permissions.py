@@ -117,7 +117,7 @@ def apply(agent: str | None = None) -> int:
 
 
 def delete(agent: str | None = None) -> None:
-    """Remove the extras inline policy (and the legacy name) — idempotent."""
+    """Remove the extras inline policy (and the legacy name)."""
     from botocore.exceptions import ClientError
 
     role_name = _runtime_role_name(agent)

@@ -39,7 +39,7 @@ def _safe(step, label: str) -> None:
 
 
 def main() -> int:
-    """Delete every provisioned resource in reverse order (best-effort, idempotent)."""
+    """Delete every provisioned resource in reverse order (best-effort)."""
     logger.info("=== Teardown (reverse order) ===")
     _safe(memory.delete_memory, "memory")
     _safe(gateway.delete_gateway, "gateway + targets")

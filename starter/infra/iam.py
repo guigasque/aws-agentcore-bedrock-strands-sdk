@@ -59,7 +59,7 @@ def _kb_policy(source_bucket: str, vector_bucket: str, acct: str) -> dict:
 
 
 def ensure_kb_role(source_bucket: str, vector_bucket: str) -> str:
-    """Create or update the KB service role; return its ARN (idempotent)."""
+    """Create or update the KB service role; return its ARN."""
     iam = session().client("iam")
     name = NAMES["kb_role"]
     acct = account_id()
@@ -78,7 +78,7 @@ def ensure_kb_role(source_bucket: str, vector_bucket: str) -> str:
         )["Role"]
         logger.info("KB role created: %s", role["Arn"])
 
-    # Inline policy (idempotent put).
+    # Inline policy.
     iam.put_role_policy(
         RoleName=name,
         PolicyName="cs-support-kb-access",
@@ -89,7 +89,7 @@ def ensure_kb_role(source_bucket: str, vector_bucket: str) -> str:
 
 
 def delete_kb_role() -> None:
-    """Delete the KB service role and its inline policy (idempotent)."""
+    """Delete the KB service role and its inline policy."""
     iam = session().client("iam")
     name = NAMES["kb_role"]
     for step in (
@@ -145,7 +145,7 @@ def ensure_lambda_role() -> str:
 
 
 def delete_lambda_role() -> None:
-    """Detach the managed policy and delete the Lambda role (idempotent)."""
+    """Detach the managed policy and delete the Lambda role."""
     iam = session().client("iam")
     name = NAMES["lambda_role"]
     for step in (
@@ -200,7 +200,7 @@ def _gateway_policy(acct: str) -> dict:
 
 
 def ensure_gateway_role() -> str:
-    """Create or update the Gateway role; return its ARN (idempotent)."""
+    """Create or update the Gateway role; return its ARN."""
     iam = session().client("iam")
     name = NAMES["gateway_role"]
     acct = account_id()
@@ -227,7 +227,7 @@ def ensure_gateway_role() -> str:
 
 
 def delete_gateway_role() -> None:
-    """Delete the Gateway role and its inline policy (idempotent)."""
+    """Delete the Gateway role and its inline policy."""
     iam = session().client("iam")
     name = NAMES["gateway_role"]
     for step in (

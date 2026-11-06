@@ -12,7 +12,7 @@ CATALOG_KEY = "product_catalog.txt"
 
 
 def ensure_bucket(name: str) -> None:
-    """Create the bucket if absent (idempotent). us-east-1 needs no LocationConstraint."""
+    """Create the bucket if absent. us-east-1 needs no LocationConstraint."""
     s3 = session().client("s3")
     try:
         s3.head_bucket(Bucket=name)
@@ -48,7 +48,7 @@ def ensure_source() -> dict[str, str]:
 
 
 def delete_source() -> None:
-    """Empty and delete the source bucket (idempotent)."""
+    """Empty and delete the source bucket."""
     s3 = session().client("s3")
     name = source_bucket_name()
     try:

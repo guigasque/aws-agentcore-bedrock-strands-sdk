@@ -19,7 +19,8 @@ log is `../DEPLOYMENT.md`; architecture diagrams are `../docs/ARCHITECTURE.md`; 
 
 ## Prerequisites
 
-- Python 3.13+, Docker running (for `agentcore deploy`), Node.js 18+ (optional MCP Inspector).
+- Python 3.13+, Node.js 18+ (optional, for MCP Inspector). Docker is optional — only needed for
+  `agentcore deploy --local`; the cloud `agentcore deploy` (direct_code_deploy) does not use it.
 - AWS credentials in `../.env` (temporary lab creds are fine). Amazon Nova 2 Lite enabled.
 
 ## 1. Environment (venv + pip)
@@ -104,7 +105,7 @@ writes the resulting `KB_ID` into `config.yaml` and syncs it into `main.py` auto
 ```bash
 agentcore configure --entrypoint main.py --name <your-agent-name> \
     --deployment-type direct_code_deploy --runtime PYTHON_3_13 --disable-memory
-agentcore deploy                     # needs Docker
+agentcore deploy                     # cloud deploy; no Docker (use --local for a container)
 python setup_permissions.py          # least-privilege policy on the runtime role
 agentcore invoke '{"prompt": "Hello", "customer_id": "CUST-123", "session_id": "s1"}'
 ```

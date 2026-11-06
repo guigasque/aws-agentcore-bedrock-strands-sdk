@@ -8,7 +8,7 @@ A conversational customer support agent for an e-commerce platform. Capabilities
   - Exact loyalty-discount math via the AgentCore Code Interpreter
   - Live web browsing via the AgentCore Browser tool
 
-Configuration lives in config.yaml (single source of truth). REGION, KB_ID and
+Configuration lives in config.yaml. REGION, KB_ID and
 MEMORY_ID are mirrored into the literals below by sync_config.py because
 setup_permissions.py AST-reads them. See ../docs/HOW_IT_WORKS.md for the full picture.
 
@@ -47,25 +47,18 @@ from strands.hooks import (
 )
 from strands.models import BedrockModel
 
-# NOTE: heavier / version-sensitive integrations are imported lazily inside the
-# functions that use them, so a slow or incompatible optional dependency can never
-# break module import (which must complete within the runtime's init window):
-#   - bedrock_agentcore.tools.code_interpreter_client.code_session  (Wave 3)
-#   - mcp.client.streamable_http.streamable_http_client             (Wave 5)
-#   - strands.tools.mcp.mcp_client.MCPClient                        (Wave 5)
-#   - the AgentCore browser tool                                    (Wave 4)
+# Browser, MCP, and code-interpreter are imported inside the functions that use them
+# rather than here — a missing or mismatched optional dep then can't stop the module
+# from loading (which has to finish inside the runtime's startup window).
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CSAI_Agent")
 
 
 # ── Configuration loader ──────────────────────────────────────────────────────
-# config.yaml is the single source of truth for every tunable value. load_config()
-# reads it and returns its contents. _MINIMAL_DEFAULTS holds ONLY the few values
-# needed to start the process if config.yaml is somehow missing/invalid at runtime
-# (e.g. not bundled into the deployed image) — it is a safety net, not a second
-# source of truth. Each value is otherwise read at its point of use with its own
-# `.get(..., fallback)` so the full config tree is never duplicated here.
+# config.yaml holds the real config. These defaults just cover the handful of values
+# needed to boot if that file is missing (e.g. not bundled in the image); everything
+# else falls back at its call site.
 
 _MINIMAL_DEFAULTS: dict[str, Any] = {
     "model_id": "global.amazon.nova-2-lite-v1:0",
@@ -75,12 +68,8 @@ _MINIMAL_DEFAULTS: dict[str, Any] = {
 
 
 def load_config(path: str | None = None) -> dict[str, Any]:
-    """Load config.yaml, falling back to minimal start-up defaults.
-
-    Returns config.yaml merged over :data:`_MINIMAL_DEFAULTS`. Never raises: when the
-    file is missing or invalid, the minimal defaults let the process start, and
-    per-key callers supply their own fallbacks for anything else.
-    """
+    """Load config.yaml over the minimal defaults. Returns defaults if the file is
+    missing or unreadable, so startup doesn't depend on it."""
     config_path = Path(path) if path else Path(__file__).resolve().parent / "config.yaml"
     merged: dict[str, Any] = {**_MINIMAL_DEFAULTS}
     try:
@@ -97,48 +86,35 @@ def load_config(path: str | None = None) -> dict[str, Any]:
 
 
 def _is_configured(value: str | None) -> bool:
-    """True when a config value is a real (non-placeholder, non-empty) string."""
+    """True unless the value is empty or still a `<placeholder>`."""
     return bool(value) and not str(value).startswith("<")
 
 
 _CFG = load_config()
 
 # ── TODO 1 — App Initialisation ───────────────────────────────────────────────
-# A single BedrockAgentCoreApp instance registers the ASGI server for AgentCore.
 app = BedrockAgentCoreApp()
 
-
-# Suppress interactive tool-consent prompts (required in headless deployments).
+# Skip interactive tool-consent prompts (there's no TTY in the deployed runtime).
 os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
 
 # ── TODO 2 — Configuration ────────────────────────────────────────────────────
-# config.yaml is the single source of truth (see load_config above). However, the
-# provided setup_permissions.py (which must not be modified) reads REGION, KB_ID and
-# MEMORY_ID by AST-parsing *literal string assignments* in this file — it calls
-# ast.literal_eval on the right-hand side, so a `_CFG.get(...)` expression would make
-# it fail. Those three therefore MUST stay as plain string literals here.
-#
-# To avoid two sources of truth, they are not hand-edited: sync_config.py mirrors
-# them from config.yaml (region / knowledge_base_id / memory_id), and infra/outputs.py
-# runs that sync automatically after provisioning. Treat the literals below like a
-# generated lockfile — edit config.yaml, then run `python sync_config.py`.
-#
-# GATEWAY_URL is NOT read by setup_permissions.py, so it is sourced directly from
-# config.yaml like every other value.
+# setup_permissions.py (which we can't change) reads REGION, KB_ID and MEMORY_ID by
+# ast.literal_eval, so these three have to be plain string literals. They're kept in
+# sync with config.yaml by sync_config.py — edit config.yaml, not these lines.
+# GATEWAY_URL isn't read by that script, so it comes straight from config.
 
 REGION    = "us-east-1"  # mirror of config.yaml:region (via sync_config.py)
-KB_ID     = "YPXPQVRBJX"  # mirror of config.yaml:knowledge_base_id (via sync_config.py)
-MEMORY_ID = "CustomerSupportMemory-V31S5N77HY"  # mirror of config.yaml:memory_id (via sync_config.py)
+KB_ID     = "YPXPQVRBJX"  # synced from config.yaml
+MEMORY_ID = "CustomerSupportMemory-V31S5N77HY"  # synced from config.yaml
 
 GATEWAY_URL = _CFG.get("gateway_url", "<gateway_url>")
 
 
 # ── TODO 3 — Model and Clients ────────────────────────────────────────────────
-# Reasoning model (Nova 2 Lite) plus the Memory and Bedrock KB runtime clients.
-# These are created lazily (cached singletons) rather than at import time, so module
-# import always completes quickly within the runtime's initialization window and a
-# transient AWS/client hiccup can never break startup.
+# Built on first use, not at import, so loading the module stays fast and doesn't
+# depend on AWS being reachable.
 model_id = _CFG.get("model_id", "global.amazon.nova-2-lite-v1:0")
 
 _model: BedrockModel | None = None
@@ -147,7 +123,7 @@ _bedrock_runtime_client: Any = None
 
 
 def get_model() -> BedrockModel:
-    """Return the shared BedrockModel, creating it on first use."""
+    """The shared Nova 2 Lite model, built once."""
     global _model
     if _model is None:
         _model = BedrockModel(model_id=model_id)
@@ -155,7 +131,7 @@ def get_model() -> BedrockModel:
 
 
 def get_memory_client() -> MemoryClient:
-    """Return the shared MemoryClient, creating it on first use."""
+    """The shared AgentCore Memory client, built once."""
     global _memory_client
     if _memory_client is None:
         _memory_client = MemoryClient(region_name=REGION)
@@ -163,16 +139,15 @@ def get_memory_client() -> MemoryClient:
 
 
 def get_bedrock_runtime() -> Any:
-    """Return the shared bedrock-agent-runtime client, creating it on first use."""
+    """The shared bedrock-agent-runtime client (used for KB Retrieve), built once."""
     global _bedrock_runtime_client
     if _bedrock_runtime_client is None:
         _bedrock_runtime_client = boto3.client("bedrock-agent-runtime", region_name=REGION)
     return _bedrock_runtime_client
 
 
-# System prompt is externalised (config.yaml:system_prompt_path).
 def _load_system_prompt() -> str:
-    """Load the system prompt from the configured file, with a minimal fallback."""
+    """Read the prompt from the file named in config; fall back to a one-liner."""
     prompt_file = _CFG.get("system_prompt_path", "system_prompt.txt")
     prompt_path = Path(__file__).resolve().parent / prompt_file
     try:
@@ -185,19 +160,7 @@ def _load_system_prompt() -> str:
 SYSTEM_PROMPT = _load_system_prompt()
 
 
-# ── TODO 4 — Namespace Helper ─────────────────────────────────────────────────
-# Implement get_namespaces() to return a dict mapping strategy type to
-# namespace template string.
-#
-# Steps:
-#   1. Call mem_client.get_memory_strategies(memory_id) to get strategy list
-#   2. Read the namespace from strategy["namespaceTemplates"][0].
-#      For compatibility with older AgentCore responses, fall back to
-#      strategy["namespaces"][0] when namespaceTemplates is absent.
-#
-# Example output:
-#   { "SEMANTIC": "cs_agent/{actorId}/facts",
-#     "USER_PREFERENCE": "cs_agent/{actorId}/preferences" }
+# ── Memory namespaces ─────────────────────────────────────────────────────────
 
 def get_namespaces(mem_client: MemoryClient, memory_id: str) -> dict:
     """Return a dict mapping strategy type → namespace template string.
@@ -215,31 +178,7 @@ def get_namespaces(mem_client: MemoryClient, memory_id: str) -> dict:
     return namespaces
 
 
-# ── TODO 5 — Memory Hook ──────────────────────────────────────────────────────
-# Implement MemoryHook, a HookProvider subclass that adds long-term memory.
-#
-# The class needs:
-#   __init__(self, actor_id, session_id, memory_client, memory_id)
-#     — store all four as instance attributes
-#     — call get_namespaces() and store the result as self.namespaces
-#
-#   retrieve_customer_context(self, event: MessageAddedEvent)
-#     — only runs for plain-text user messages (not tool results)
-#     — for each strategy namespace, call memory_client.retrieve_memories(
-#          memory_id, namespace (formatted with actorId), query, top_k=5)
-#     — collect non-empty memory texts tagged with their strategy type
-#     — if any memories found, prepend them to the user message as:
-#          "Customer Context:\n<memories>\n\n<original_message>"
-#
-#   save_support_interaction(self, event: AfterInvocationEvent)
-#     — walk the message list backwards to find the last plain-text user
-#       query and the last assistant response
-#     — call memory_client.create_event(memory_id, actor_id, session_id,
-#          messages=[(customer_query, "USER"), (agent_response, "ASSISTANT")])
-#
-#   register_hooks(self, registry: HookRegistry)
-#     — register retrieve_customer_context on MessageAddedEvent
-#     — register save_support_interaction on AfterInvocationEvent
+# ── Long-term memory hook ─────────────────────────────────────────────────────
 
 class MemoryHook(HookProvider):
     """Long-term memory hook for the customer support agent."""
@@ -257,7 +196,7 @@ class MemoryHook(HookProvider):
         self.memory_id = memory_id
         try:
             self.namespaces = get_namespaces(memory_client, memory_id)
-        except Exception as error:  # memory not ready yet — degrade, don't crash
+        except Exception as error:  # memory may not be ready yet — skip it for now
             logger.warning("Could not load memory namespaces (%s); memory disabled this turn.", error)
             self.namespaces = {}
 
@@ -343,20 +282,7 @@ class MemoryHook(HookProvider):
         registry.add_callback(AfterInvocationEvent, self.save_support_interaction)
 
 
-# ── TODO 6 — Knowledge Base Tool ─────────────────────────────────────────────
-# Implement search_knowledge_base(query) using the @tool decorator.
-#
-# Steps:
-#   1. Guard: if KB_ID is empty return "Knowledge base not configured."
-#   2. Call _bedrock_runtime.retrieve(
-#          knowledgeBaseId=KB_ID,
-#          retrievalQuery={"text": query}
-#      )
-#   3. Extract resp["retrievalResults"]; return a message if empty
-#   4. Join the text chunks with "\n---\n" and return the result
-#
-# The docstring is the tool description — the model uses it to decide when
-# to call this tool, so keep it clear and accurate.
+# ── Knowledge Base search (RAG) ───────────────────────────────────────────────
 
 @tool
 def search_knowledge_base(query: str) -> str:
@@ -387,7 +313,7 @@ def search_knowledge_base(query: str) -> str:
                 "vectorSearchConfiguration": {"numberOfResults": top_k}
             },
         )
-    except Exception as error:  # degrade gracefully; never crash the turn
+    except Exception as error:  # a KB hiccup shouldn't sink the whole reply
         logger.warning("Knowledge base retrieve failed: %s", error)
         return f"Knowledge base search failed: {error}"
 
@@ -420,10 +346,10 @@ class DiscountBreakdown(BaseModel):
 
 
 def _validated_breakdown(data: dict) -> str:
-    """Validate `data` against DiscountBreakdown and return clean JSON.
+    """Return `data` as JSON after checking it against DiscountBreakdown.
 
-    On validation failure, log and return the original data as JSON so the tool still
-    responds (validation is a safety net, not a hard gate that could break a turn).
+    If it doesn't validate, log the reason and return the data anyway — we'd rather
+    show the numbers than fail the request over a schema quibble.
     """
     try:
         return DiscountBreakdown(**data).model_dump_json()
@@ -432,22 +358,7 @@ def _validated_breakdown(data: dict) -> str:
         return json.dumps(data)
 
 
-# ── TODO 7 — Loyalty Discount Tool (Code Interpreter) ────────────────────────
-# Implement calculate_loyalty_discount() using the @tool decorator.
-#
-# The tool must:
-#   1. Build a self-contained Python code string that:
-#        • Defines earn_rates: {"standard": 1, "device": 2, "fresh": 5}
-#        • Defines tier_rates: {"Silver": 0.00, "Gold": 0.10, "Platinum": 0.15}
-#        • Calculates points_redeemed (floor to nearest 500, cap at 50% of order)
-#        • Calculates tier_discount (applied to subtotal after points)
-#        • Calculates final_total, total_savings, points_earned, remaining_points
-#        • Prints a JSON result dict
-#   2. Execute the code with code_session(REGION).invoke("executeCode", {...})
-#      using language="python" and clearContext=True
-#   3. Return the first result event as a JSON string
-#   4. Include a fallback that computes only the tier discount if the
-#      Code Interpreter is unavailable
+# ── Loyalty discount (Code Interpreter) ───────────────────────────────────────
 
 @tool
 def calculate_loyalty_discount(
@@ -528,7 +439,7 @@ def calculate_loyalty_discount(
     """
 
     try:
-        # Lazy import keeps module import light and crash-proof.
+        # Import here so the module still loads if this package isn't present.
         from bedrock_agentcore.tools.code_interpreter_client import code_session
 
         with code_session(REGION) as sandbox:
@@ -570,50 +481,32 @@ def calculate_loyalty_discount(
         })
 
 
-# ── Browser tool (lazy, graceful) ─────────────────────────────────────────────
-# The AgentCore browser tool is imported lazily so a missing/incompatible optional
-# dependency can never break module import. Note: strands_tools.browser was removed
-# in strands-agents-tools 0.9.0 — we pin <0.9.0 (see pyproject.toml). If the import
-# is unavailable, we log and return [] so the agent still runs without web browsing.
+# ── Browser tool ──────────────────────────────────────────────────────────────
+# AgentCoreBrowser lives in strands_tools.browser, which 0.9.0 dropped — pyproject
+# pins <0.9.0. Imported here (not at the top) so a bad version doesn't block startup.
 def _browser_tools() -> list:
-    """Return the AgentCore browser tool as a one-item list, or [] if unavailable."""
+    """The AgentCore browser tool, or [] if it isn't available."""
     try:
         from strands_tools.browser import AgentCoreBrowser
 
         timeout = _CFG.get("browser", {}).get("session_timeout", 3600)
         browser = AgentCoreBrowser(region=REGION, session_timeout=timeout)
         return [browser.browser]
-    except Exception as error:  # ImportError or construction failure — degrade gracefully
+    except Exception as error:
         logger.warning("Browser tool unavailable (%s); continuing without web browsing.", error)
         return []
 
 
-# ── TODO 8 — Agent Entrypoint ─────────────────────────────────────────────────
-# Implement the invoke() function decorated with @app.entrypoint.
-#
-# Steps:
-#   1. Extract user_input, actor_id, and session_id from the payload
-#      (generate a UUID if session_id is missing)
-#   2. Instantiate MemoryHook for this actor/session
-#   3. Instantiate AgentCoreBrowser(region=REGION)
-#   4. Build the tools list: [search_knowledge_base, calculate_loyalty_discount,
-#                              agent_core_browser.browser]
-#   5. Connect to the Gateway via MCPClient, load gateway_tools, extend tools list
-#   6. Create and invoke the Agent with all tools, hooks, and system_prompt
-#   7. Return the text from the first content block of the response
-#   8. Handle exceptions gracefully
+# ── Agent entrypoint ──────────────────────────────────────────────────────────
 
 @app.entrypoint
 async def invoke(payload: dict[str, Any], context: Any = None) -> str:
-    """Main handler called by AgentCore for every incoming request.
+    """Handle one request from AgentCore.
 
-    Expected payload keys:
+    payload keys:
       prompt      (str, required) — the customer's message
-      customer_id (str, optional) — unique customer identifier (memory actor id)
-      session_id  (str, optional) — session identifier; generated if absent
-
-    Wave 1 builds a tool-less agent (model only). Later waves add the KB, loyalty,
-    browser, and gateway tools plus the memory hook.
+      customer_id (str, optional) — memory actor id
+      session_id  (str, optional) — session id; generated if absent
     """
     try:
         user_input = (payload or {}).get("prompt")
@@ -625,13 +518,12 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         logger.info("invoke actor_id=%s session_id=%s", actor_id, session_id)
 
         tools: list = [search_knowledge_base, calculate_loyalty_discount]
-        tools += _browser_tools()  # AgentCore browser (lazy; [] if unavailable)
+        tools += _browser_tools()
 
-        hooks = _memory_hooks(actor_id, session_id)  # cross-session memory ([] if unconfigured)
+        hooks = _memory_hooks(actor_id, session_id)
 
-        # Gateway MCP tools (orders & refunds) are only valid inside the MCP client
-        # context, so the Agent is created and run there. If the gateway is not
-        # configured/reachable, fall back to running with the local tools only.
+        # Gateway tools only work while the MCP client is open, so build and run the
+        # agent inside the `with`. No gateway configured → just use the local tools.
         mcp_client = _gateway_client()
         if mcp_client is None:
             agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
@@ -641,30 +533,30 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
         with mcp_client:
             try:
                 tools.extend(mcp_client.list_tools_sync())
-            except Exception as error:  # gateway hiccup — continue with local tools
+            except Exception as error:
                 logger.warning("Could not load gateway tools (%s); using local tools only.", error)
             agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
             result = agent(user_input)
         return _response_text(result)
-    except Exception as error:  # noqa: BLE001 - entrypoint must never crash the runtime
+    except Exception as error:  # noqa: BLE001 - one bad request shouldn't take down the runtime
         logger.exception("invoke failed")
         return f"Error handling request: {error}"
 
 
 def _memory_hooks(actor_id: str, session_id: str) -> list:
-    """Return [MemoryHook] for cross-session memory, or [] if Memory is unconfigured."""
+    """[MemoryHook] for this customer/session, or [] if Memory isn't configured."""
     if not _is_configured(MEMORY_ID):
         logger.info("Memory not configured; skipping memory hook.")
         return []
     try:
         return [MemoryHook(actor_id, session_id, get_memory_client(), MEMORY_ID)]
-    except Exception as error:  # degrade gracefully — never block the turn
+    except Exception as error:  # if memory's down, just answer without it
         logger.warning("Could not build memory hook (%s); continuing without memory.", error)
         return []
 
 
 def _gateway_client():
-    """Build an MCPClient for the AgentCore Gateway, or None if not configured."""
+    """An MCPClient pointed at the AgentCore Gateway, or None if it isn't set up."""
     if not _is_configured(GATEWAY_URL):
         logger.info("Gateway not configured; skipping MCP tools.")
         return None
@@ -673,7 +565,7 @@ def _gateway_client():
         from strands.tools.mcp.mcp_client import MCPClient
 
         return MCPClient(lambda: streamable_http_client(GATEWAY_URL))
-    except Exception as error:  # import/construction failure — degrade gracefully
+    except Exception as error:
         logger.warning("Could not create MCP client (%s); skipping gateway tools.", error)
         return None
 

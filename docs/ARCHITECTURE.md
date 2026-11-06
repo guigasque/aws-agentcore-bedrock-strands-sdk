@@ -170,7 +170,7 @@ flowchart TD
         i8 --> i9["outputs.py → config.yaml → sync_config.py → main.py literals"]
     end
     i9 --> d1["agentcore configure"]
-    d1 --> d2["agentcore deploy (Docker)"]
+    d1 --> d2["agentcore deploy (cloud; no Docker)"]
     d2 --> d3["setup_permissions.py"]
     d3 --> d4["infra.verify (identity, MCP list, KB probe, Memory ACTIVE)"]
     d4 --> tests["Six functional tests"]

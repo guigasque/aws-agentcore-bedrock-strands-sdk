@@ -17,7 +17,7 @@ DATA_TYPE = "float32"
 
 
 def ensure_vectors() -> dict[str, str]:
-    """Create the vector bucket + index if absent. Return names/ARNs (idempotent)."""
+    """Create the vector bucket + index if absent. Return names/ARNs."""
     sv = session().client("s3vectors")
     bucket = vector_bucket_name()
     index = NAMES["vector_index"]
@@ -54,7 +54,7 @@ def ensure_vectors() -> dict[str, str]:
 
 
 def delete_vectors() -> None:
-    """Delete the vector index and bucket (idempotent)."""
+    """Delete the vector index and bucket."""
     sv = session().client("s3vectors")
     bucket = vector_bucket_name()
     index = NAMES["vector_index"]

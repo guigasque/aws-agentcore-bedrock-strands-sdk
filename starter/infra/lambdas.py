@@ -32,7 +32,7 @@ def _zip_single(source_file: Path) -> bytes:
 
 
 def _ensure_function(name: str, source_file: Path, role_arn: str) -> str:
-    """Create or update one Lambda function; return its ARN (idempotent)."""
+    """Create or update one Lambda function; return its ARN."""
     client = session().client("lambda")
     code = _zip_single(source_file)
     try:
@@ -77,7 +77,7 @@ def ensure_lambdas(role_arn: str) -> dict[str, str]:
 
 
 def allow_invoke(function_name: str, principal: str, source_arn: str, statement_id: str) -> None:
-    """Add a resource-based permission so `principal` may invoke the function (idempotent)."""
+    """Add a resource-based permission so `principal` may invoke the function."""
     client = session().client("lambda")
     try:
         client.add_permission(
@@ -94,7 +94,7 @@ def allow_invoke(function_name: str, principal: str, source_arn: str, statement_
 
 
 def delete_lambdas() -> None:
-    """Delete both Lambda functions (idempotent)."""
+    """Delete both Lambda functions."""
     client = session().client("lambda")
     for name in (NAMES["order_lambda"], NAMES["refund_lambda"]):
         try:
