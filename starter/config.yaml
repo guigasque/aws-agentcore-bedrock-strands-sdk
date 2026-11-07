@@ -2,7 +2,7 @@ model_id: global.amazon.nova-2-lite-v1:0
 region: us-east-1
 gateway_url: https://customersupportgateway-entnsccdms.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp
 knowledge_base_id: YPXPQVRBJX
-memory_id: CustomerSupportMemory-V31S5N77HY
+memory_id: CustomerSupportMemory-acsKnc57RP
 retrieval:
   top_k: 5
   chunk_separator: '

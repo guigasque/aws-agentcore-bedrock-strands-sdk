@@ -107,7 +107,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
 REGION    = "us-east-1"  # mirror of config.yaml:region (via sync_config.py)
 KB_ID     = "YPXPQVRBJX"  # synced from config.yaml
-MEMORY_ID = "CustomerSupportMemory-V31S5N77HY"  # synced from config.yaml
+MEMORY_ID = "CustomerSupportMemory-acsKnc57RP"  # synced from config.yaml
 
 GATEWAY_URL = _CFG.get("gateway_url", "<gateway_url>")
 
@@ -522,22 +522,40 @@ async def invoke(payload: dict[str, Any], context: Any = None) -> str:
 
         hooks = _memory_hooks(actor_id, session_id)
 
-        # Gateway tools only work while the MCP client is open, so build and run the
-        # agent inside the `with`. No gateway configured → just use the local tools.
+        def run_agent() -> str:
+            agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
+            return _response_text(agent(user_input))
+
+        # Gateway tools only work while the MCP client is open, so load them and run
+        # the agent inside the `with`. Any gateway problem (not configured, timeout,
+        # connection refused, bad URL) falls back to answering with the local tools
+        # instead of failing the request.
         mcp_client = _gateway_client()
         if mcp_client is None:
-            agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
-            result = agent(user_input)
-            return _response_text(result)
+            return run_agent()
 
-        with mcp_client:
-            try:
-                tools.extend(mcp_client.list_tools_sync())
-            except Exception as error:
-                logger.warning("Could not load gateway tools (%s); using local tools only.", error)
-            agent = Agent(model=get_model(), tools=tools, hooks=hooks, system_prompt=SYSTEM_PROMPT)
-            result = agent(user_input)
-        return _response_text(result)
+        # Open the gateway, load its tools, and run the agent inside the context
+        # (gateway tools are only valid while it's open). If opening or loading the
+        # gateway fails, fall back to the local tools rather than failing the request.
+        try:
+            with mcp_client:
+                try:
+                    gateway_tools = mcp_client.list_tools_sync()
+                    tools.extend(gateway_tools)
+                    logger.info("Gateway connected; loaded %d tool(s).", len(gateway_tools))
+                except TimeoutError:
+                    logger.exception("Gateway tool loading timed out; using local tools only.")
+                except ConnectionError:
+                    logger.exception("Gateway connection failed; using local tools only.")
+                except Exception as error:  # noqa: BLE001
+                    logger.exception("Gateway tool loading failed (%s); using local tools only.", error)
+                return run_agent()
+        except (TimeoutError, ConnectionError) as error:
+            logger.exception("Could not open the gateway (%s); using local tools only.", error)
+        except Exception as error:  # noqa: BLE001 - any gateway issue → degrade, don't crash
+            logger.exception("Gateway unavailable (%s); using local tools only.", error)
+
+        return run_agent()
     except Exception as error:  # noqa: BLE001 - one bad request shouldn't take down the runtime
         logger.exception("invoke failed")
         return f"Error handling request: {error}"

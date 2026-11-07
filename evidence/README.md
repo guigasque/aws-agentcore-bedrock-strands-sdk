@@ -205,7 +205,7 @@ Provisioned for this run:
 |----------|-----------|
 | Knowledge Base | `CustomerSupportKB` → `YPXPQVRBJX` (S3 Vectors, Titan v2) |
 | Gateway | `CustomerSupportGateway` → `…/mcp`, targets `order-tracker` (API GW) + `refund-processor` (Lambda) |
-| Memory | `CustomerSupportMemory-V31S5N77HY` (semantic facts + user preferences) |
+| Memory | `CustomerSupportMemory-acsKnc57RP` (semantic facts + user preferences) |
 | Lambdas | `order-tracker`, `refund-processor` (Python 3.12) |
 | REST API | `cs-support-api`, stage `prod` |
 

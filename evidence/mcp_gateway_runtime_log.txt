@@ -1,0 +1,49 @@
+Runtime log — MCP Gateway tool invocations (well-formed)
+=========================================================
+Runtime : cs_support_agent-yMZc9TGr2D  (us-east-1, acct 024333017526)
+Gateway : CustomerSupportGateway -> .../mcp  (READY, 6 MCP tools)
+Targets : order-tracker (API Gateway REST) + refund-processor (Lambda)
+Source  : CloudWatch /aws/bedrock-agentcore/runtimes/cs_support_agent-yMZc9TGr2D-DEFAULT
+
+Each turn logs "Gateway connected; loaded 6 tool(s)." (the success-path logger.info
+added for the MCP fix) followed by the tool call. No ResourceNotFound / tracebacks.
+Identifiers below are non-secret (session/request/account IDs). No credentials shown.
+
+--- T1  order tracking via Gateway (session=t1) ---
+00:14:30  INFO:CSAI_Agent:invoke actor_id=CUST-123 session_id=t1
+00:14:32  INFO:CSAI_Agent:Gateway connected; loaded 6 tool(s).
+00:14:34  Tool #1: order-tracker___get_order
+00:14:36  INFO:CSAI_Agent:Saved interaction to memory for actor_id=CUST-123
+
+--- T2  refund via Gateway (session=t2) ---
+01:15:51  INFO:CSAI_Agent:invoke actor_id=CUST-123 session_id=t2
+01:15:51  INFO:CSAI_Agent:Gateway connected; loaded 6 tool(s).
+01:15:52  Tool #1: refund-processor___initiate_refund
+01:15:54  INFO:CSAI_Agent:Saved interaction to memory for actor_id=CUST-123
+
+--- Full suite (earlier run, both Gateway tools + KB + loyalty + browser + memory) ---
+00:28:06  invoke session_id=final-t2
+00:28:06  Gateway connected; loaded 6 tool(s).
+00:28:08  Tool #1: order-tracker___get_order
+00:28:09  Tool #2: refund-processor___initiate_refund
+00:28:11  Saved interaction to memory
+
+00:28:18  invoke session_id=final-t3
+00:28:18  Gateway connected; loaded 6 tool(s).
+00:28:19  Tool #1: search_knowledge_base
+
+00:28:23  invoke session_id=final-t5
+00:28:23  Gateway connected; loaded 6 tool(s).
+00:28:25  Tool #1: calculate_loyalty_discount
+
+00:28:36  invoke session_id=final-t6
+00:28:36  Gateway connected; loaded 6 tool(s).
+00:28:38  Tool #1: browser  (#2..#4 follow)
+
+00:29:33  invoke session_id=final-t4a   (memory write)
+00:31:06  invoke session_id=final-t4b   (memory recall, new session)
+
+Reproduce:
+  aws logs tail /aws/bedrock-agentcore/runtimes/cs_support_agent-yMZc9TGr2D-DEFAULT \
+    --log-stream-name-prefix "$(date -u +%Y/%m/%d)/[runtime-logs" --since 60m \
+    | grep -E "Gateway connected|Tool #"

@@ -93,6 +93,46 @@ The Gateway uses the **NONE authorizer** — fine for a throwaway sandbox, not f
 Before production it has to move to SigV4 or JWT, which also means the agent signs its MCP calls.
 IAM is already scoped per-resource (no wildcard admin), and no secrets live in the repo; those stay.
 
+## Architecture: microservices? Kubernetes? (probably not)
+
+A common instinct at scale is "break it into microservices and run it on K8s." For this system that
+would mostly add complexity without solving a real problem — and it helps to see why.
+
+**It's already decomposed where it matters.** The agent is one deployable unit, but the work is
+spread across services that scale on their own: the order/refund tools are independent **Lambdas**
+behind a managed **MCP Gateway**; RAG is Bedrock KB + S3 Vectors; memory, code interpreter and
+browser are managed AgentCore services. The Lambdas behind the Gateway *are* microservices — we just
+didn't have to run any of it.
+
+**Splitting the agent itself buys nothing here.** The test for a service boundary is a genuine
+difference in scaling, deployment cadence, or team ownership. The agent's capabilities share one
+request/response path and scale together per conversation. Pulling "the KB tool" or "the memory hook"
+into their own services would add network hops (latency up), more things to deploy/secure/monitor,
+and distributed-failure handling — to buy nothing. That's premature decomposition. The one defensible
+split later is a **slow/async tool** (the browser, with its seconds-long sessions) behind its own
+service so it doesn't tie up the agent — but that's an optimization for a measured problem, not a
+starting shape.
+
+**Kubernetes would be a step backwards.** AgentCore already gives a managed, autoscaling runtime with
+observability and no nodes to own. Moving to EKS means taking back node pools, patching, scaling
+policies and ingress to replace something AWS runs for us. K8s earns its keep only if we outgrow a
+hard AgentCore limitation we can *name* (a latency profile, a sidecar pattern, a networking need it
+can't express) — this workload doesn't.
+
+**The structural changes that would actually matter, in order:**
+1. **Event-driven for slow/side-effecting work.** Make refunds and ingestion fire-and-forget to a
+   queue (SQS/EventBridge); the agent returns "in progress." This decouples user-facing latency from
+   backend work and is the highest-value change for a real product.
+2. **Multi-agent (orchestrator → workers)** — a supervisor routing to specialized sub-agents (orders,
+   returns). This is the agentic equivalent of microservices, and it's worth it only when a single
+   agent's tool list/prompt grows large enough that routing degrades. Five capabilities fit one agent
+   comfortably; revisit when that stops being true.
+3. **Shared tool layer** — if other agents/apps reuse the order/refund tools, the Gateway already is
+   that shared layer. Already built that way.
+
+Short version: keep the current shape; if real traffic demands it, go **event-driven for the slow
+paths** and consider an orchestrator/sub-agent split — not containers on K8s.
+
 ## What I would NOT do yet
 
 Not speculatively optimize. The right first step is to add the latency metrics above, deploy, watch
